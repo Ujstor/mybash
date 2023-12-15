@@ -209,6 +209,10 @@ alias sha1='openssl sha1'
 
 alias clickpaste='sleep 3; xdotool type "$(xclip -o -selection clipboard)"'
 
+# SSH
+alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
+
+
 # KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
 
 alias kssh="kitty +kitten ssh"
@@ -674,3 +678,6 @@ else
 	echo "can't found the autojump script"
 fi
 
+
+export PATH=$PATH:/usr/local/go/bin
+export PATH=$HOME/miniconda3/bin:$PATH
