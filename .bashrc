@@ -668,8 +668,10 @@ export PATH=$PATH:"$HOME/.local/bin:$HOME/.cargo/bin:/var/lib/flatpak/exports/bi
 
 eval "$(starship init bash)"
 
-#Autojump
+export PATH=$PATH:/usr/local/go/bin
+export PATH=$HOME/miniconda3/bin:$PATH
 
+#Autojump
 if [ -f "/usr/share/autojump/autojump.sh" ]; then
 	. /usr/share/autojump/autojump.sh
 elif [ -f "/usr/share/autojump/autojump.bash" ]; then
@@ -679,5 +681,3 @@ else
 fi
 
 
-export PATH=$PATH:/usr/local/go/bin
-export PATH=$HOME/miniconda3/bin:$PATH
