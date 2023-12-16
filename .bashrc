@@ -668,7 +668,8 @@ export PATH=$PATH:"$HOME/.local/bin:$HOME/.cargo/bin:/var/lib/flatpak/exports/bi
 
 eval "$(starship init bash)"
 
-export PATH=$PATH:/usr/local/go/bin
+export GOPATH=$HOME/go
+export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
 export PATH=$HOME/miniconda3/bin:$PATH
 
 #Autojump
