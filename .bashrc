@@ -222,6 +222,12 @@ alias clickpaste='sleep 3; xdotool type "$(xclip -o -selection clipboard)"'
 # SSH
 alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
 
+# Used ports
+alias ports='ss -tulpn'
+
+#moniteroff
+alias monitoroff='xset dpms force off'
+
 
 # KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
 
@@ -680,7 +686,9 @@ eval "$(starship init bash)"
 
 export GOPATH=$HOME/go
 export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+
 export PATH=$HOME/miniconda3/bin:$PATH
+alias conda-init='source /home/ujstor/miniconda3/bin/activate'
 
 #Autojump
 if [ -f "/usr/share/autojump/autojump.sh" ]; then
@@ -692,3 +700,14 @@ else
 fi
 
 
+if [ -f "/root/.use-nala" ]; then
+        . "/root/.use-nala"
+fi
+
+if [ -f "/home/ujstor/.use-nala" ]; then
+        . "/home/ujstor/.use-nala"
+fi
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
