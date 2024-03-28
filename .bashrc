@@ -228,8 +228,6 @@ alias ports='ss -tulpn'
 #moniteroff
 alias monitoroff='xset dpms force off'
 
-#kubectl
-
 
 # KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
 
@@ -716,3 +714,7 @@ export NVM_DIR="$HOME/.nvm"
 
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 complete -C /usr/bin/terraform terraform
+
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+export PATH="$PATH:/opt/nvim-linux64/bin"
