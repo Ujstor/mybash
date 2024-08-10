@@ -28,8 +28,8 @@ fi
 if [[ $iatest -gt 0 ]]; then bind "set bell-style visible"; fi
 
 # Expand the history size
-export HISTFILESIZE=10000
-export HISTSIZE=500
+export HISTFILESIZE=1000000
+export HISTSIZE=50000
 export HISTTIMEFORMAT="%F %T" # add timestamp to history
 
 # Don't put duplicate lines in the history and do not add lines that start with a space
@@ -68,7 +68,6 @@ alias pico='edit'
 alias spico='sedit'
 alias nano='edit'
 alias snano='sedit'
-alias vim='nvim'
 
 # To have colors for ls and all grep commands such as grep, egrep and zgrep
 export CLICOLOR=1
@@ -233,8 +232,16 @@ alias sha1='openssl sha1'
 
 alias clickpaste='sleep 3; xdotool type "$(xclip -o -selection clipboard)"'
 
-# KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
+# SSH
+alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
 
+# Used ports
+alias ports='ss -tulpn'
+
+#moniteroff
+alias monitoroff='xset dpms force off'
+
+# KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
 alias kssh="kitty +kitten ssh"
 
 # alias to cleanup unused docker containers, images, networks, and volumes
@@ -586,17 +593,8 @@ trim() {
 	var="${var%"${var##*[![:space:]]}"}" # remove trailing whitespace characters
 	echo -n "$var"
 }
-# GitHub Titus Additions
-
-gcom() {
-	git add .
-	git commit -m "$1"
-}
-lazyg() {
-	git add .
-	git commit -m "$1"
-	git push
-}
+_z_cd() {
+    cd "$@" || return "$?"
 
 function hb {
     if [ $# -eq 0 ]; then
@@ -617,9 +615,37 @@ function hb {
     fi
 }
 
-#######################################################
-# Set the ultimate amazing command prompt
-#######################################################
+zi() {
+    _zoxide_result="$(zoxide query -i -- "$@")" && _z_cd "$_zoxide_result"
+}
+
+
+alias za='zoxide add'
+
+alias zq='zoxide query'
+alias zqi='zoxide query -i'
+
+alias zr='zoxide remove'
+zri() {
+    _zoxide_result="$(zoxide query -i -- "$@")" && zoxide remove "$_zoxide_result"
+}
+
+
+_zoxide_hook() {
+    if [ -z "${_ZO_PWD}" ]; then
+        _ZO_PWD="${PWD}"
+    elif [ "${_ZO_PWD}" != "${PWD}" ]; then
+        _ZO_PWD="${PWD}"
+        zoxide add "$(pwd -L)"
+    fi
+}
+
+case "$PROMPT_COMMAND" in
+    *_zoxide_hook*) ;;
+    *) PROMPT_COMMAND="_zoxide_hook${PROMPT_COMMAND:+;${PROMPT_COMMAND}}" ;;
+esac
+alias lookingglass="~/looking-glass-B5.0.1/client/build/looking-glass-client -F"
+
 
 alias hug="hugo server -F --bind=10.0.0.97 --baseURL=http://10.0.0.97"
 
@@ -633,3 +659,80 @@ export PATH=$PATH:"$HOME/.local/bin:$HOME/.cargo/bin:/var/lib/flatpak/exports/bi
 
 eval "$(starship init bash)"
 eval "$(zoxide init bash)"
+
+export GOPATH=$HOME/go
+export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
+
+export PATH=$HOME/miniconda3/bin:$PATH
+alias conda-init='source $HOME/miniconda3/bin/activate'
+
+#Autojump
+if [ -f "/usr/share/autojump/autojump.sh" ]; then
+	. /usr/share/autojump/autojump.sh
+elif [ -f "/usr/share/autojump/autojump.bash" ]; then
+	. /usr/share/autojump/autojump.bash
+else
+	echo "can't found the autojump script"
+fi
+
+export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
+complete -C /usr/bin/terraform terraform
+
+#eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+export PATH="$PATH:/opt/nvim-linux64/bin"
+
+if [ -f "/home/ujstor/.use-nala" ]; then
+        . "/home/ujstor/.use-nala"
+fi
+
+# sst
+export PATH=$HOME/.sst/bin:$PATH
+
+# add Pulumi to the PATH
+export PATH=$PATH:$HOME/.pulumi/bin
+
+source <(kubectl completion bash)
+alias k='kubectl'
+complete -F __start_kubectl k
+
+source <(helm completion bash)
+
+
+alias docker-clean=' \
+  docker container prune -f ; \
+  docker image prune -f ; \
+  docker network prune -f ; \
+  docker volume prune -f '
+
+install_nvme_cli() {
+    if ! command -v nvme &> /dev/null; then
+        echo "nvme-cli not found, installing..."
+        if [[ -f /etc/debian_version ]]; then
+            sudo apt-get update && sudo apt-get install -y nvme-cli
+        elif [[ -f /etc/redhat-release ]]; then
+            sudo yum install -y nvme-cli
+        elif [[ -f /etc/arch-release ]]; then
+            sudo pacman -Syu --noconfirm nvme-cli
+        else
+            echo "Unsupported OS. Please install nvme-cli manually."
+            return 1
+        fi
+    fi
+}
+
+check_nvme_temps() {
+    for dev in /dev/nvme[0-9]n[0-9]; do
+        echo "$dev: $(sudo nvme smart-log $dev | grep -i temperature)"
+    done
+}
+
+alias nvmetemp='check_nvme_temps'
+alias c='clear'
+alias tf='terraform'
+
+source <(k3d completion bash)
+source <(go-blueprint completion bash)
+
+alias t='terraform'
+complete -C /usr/bin/terraform t
