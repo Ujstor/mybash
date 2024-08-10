@@ -4,9 +4,12 @@ iatest=$(expr index "$-" i)
 #######################################################
 # SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
 #######################################################
-if [ -f /usr/bin/fastfetch ]; then
-	fastfetch
-fi
+
+alias fastfetch='fastfetch -c ~/config.jsonc'
+
+# if [ -f /usr/bin/fastfetch ]; then
+# 	fastfetch -c ~/config.jsonc
+# fi
 
 # Source global definitions
 if [ -f /etc/bashrc ]; then
@@ -350,14 +353,14 @@ up() {
 }
 
 # Automatically do an ls after each cd, z, or zoxide
-cd ()
-{
-	if [ -n "$1" ]; then
-		builtin cd "$@" && ls
-	else
-		builtin cd ~ && ls
-	fi
-}
+# cd ()
+# {
+# 	if [ -n "$1" ]; then
+# 		builtin cd "$@" && ls -la
+# 	else
+# 		builtin cd ~ && ls -la
+# 	fi
+# }
 
 # Returns the last 2 fields of the working directory
 pwdtail() {
@@ -593,9 +596,10 @@ trim() {
 	var="${var%"${var##*[![:space:]]}"}" # remove trailing whitespace characters
 	echo -n "$var"
 }
-_z_cd() {
-    cd "$@" || return "$?"
-}
+
+# _z_cd() {
+#     cd "$@" || return "$?"
+# }
 
 function hb {
     if [ $# -eq 0 ]; then
@@ -683,8 +687,8 @@ complete -C /usr/bin/terraform terraform
 
 export PATH="$PATH:/opt/nvim-linux64/bin"
 
-if [ -f "/home/ujstor/.use-nala" ]; then
-        . "/home/ujstor/.use-nala"
+if [ -f "$HOME/.use-nala" ]; then
+        . "$HOME/.use-nala"
 fi
 
 # sst
@@ -737,3 +741,4 @@ source <(go-blueprint completion bash)
 
 alias t='terraform'
 complete -C /usr/bin/terraform t
+
