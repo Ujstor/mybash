@@ -595,6 +595,7 @@ trim() {
 }
 _z_cd() {
     cd "$@" || return "$?"
+}
 
 function hb {
     if [ $# -eq 0 ]; then
