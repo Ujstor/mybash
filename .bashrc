@@ -1,5 +1,3 @@
-#!/usr/bin/env bash
-iatest=$(expr index "$-" i)
 
 #######################################################
 # SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
@@ -698,6 +696,8 @@ export PATH=$HOME/.sst/bin:$PATH
 export PATH=$PATH:$HOME/.pulumi/bin
 
 source <(kubectl completion bash)
+alias kubectl=kubecolor
+complete -o default -F __start_kubectl kubecolor
 alias k='kubectl'
 complete -F __start_kubectl k
 
@@ -741,4 +741,3 @@ source <(go-blueprint completion bash)
 
 alias t='terraform'
 complete -C /usr/bin/terraform t
-
