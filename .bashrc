@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+iatest=$(expr index "$-" i)
 
 #######################################################
 # SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
@@ -681,7 +683,7 @@ fi
 export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
 complete -C /usr/bin/terraform terraform
 
-#eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
 
 export PATH="$PATH:/opt/nvim-linux64/bin"
 
@@ -741,3 +743,11 @@ source <(go-blueprint completion bash)
 
 alias t='terraform'
 complete -C /usr/bin/terraform t
+
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+export LIBVIRT_DEFAULT_URI='qemu:///system'
+export PATH=/home/ujstor/bin:$PATH
+
