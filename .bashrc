@@ -5,7 +5,7 @@ iatest=$(expr index "$-" i)
 # SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
 #######################################################
 
-alias fastfetch='fastfetch -c ~/config.jsonc'
+# alias fastfetch='fastfetch -c ~/config.jsonc'
 
 # if [ -f /usr/bin/fastfetch ]; then
 # 	fastfetch -c ~/config.jsonc
