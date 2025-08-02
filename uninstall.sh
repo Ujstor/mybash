@@ -49,7 +49,7 @@ determine_sudo_command() {
 }
 
 uninstall_dependencies() {
-    DEPENDENCIES='bash-completion bat tree multitail fastfetch neovim trash-cli'
+    DEPENDENCIES='bash-completion bat tree multitail trash-cli'
 
     print_colored "$YELLOW" "Uninstalling dependencies..."
     if [ "$PACKAGER" = "pacman" ]; then

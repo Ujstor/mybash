@@ -100,8 +100,65 @@ check_environment() {
     fi
 }
 
+is_debian_old() {
+    if [ -f /etc/debian_version ]; then
+        DEBIAN_VERSION=$(cat /etc/debian_version | cut -d. -f1)
+        if [ "$DEBIAN_VERSION" -lt 13 ] 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+install_fastfetch_direct() {
+    if command_exists fastfetch; then
+        printf "Fastfetch already installed\n"
+        return 0
+    fi
+
+    print_colored "$YELLOW" "Installing fastfetch via direct download..."
+
+    # Detect architecture
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64) DEB_ARCH="amd64" ;;
+        aarch64) DEB_ARCH="arm64" ;;
+        armv7l) DEB_ARCH="armhf" ;;
+        i686) DEB_ARCH="i386" ;;
+        *) 
+            print_colored "$RED" "Unsupported architecture: $ARCH"
+            return 1
+            ;;
+    esac
+
+    # Get latest release URL
+    FASTFETCH_URL="https://github.com/fastfetch-cli/fastfetch/releases/latest/download/fastfetch-linux-${DEB_ARCH}.deb"
+    TEMP_DEB="/tmp/fastfetch.deb"
+
+    if wget -q "$FASTFETCH_URL" -O "$TEMP_DEB"; then
+        if ${SUDO_CMD} dpkg -i "$TEMP_DEB"; then
+            print_colored "$GREEN" "Fastfetch installed successfully"
+            rm -f "$TEMP_DEB"
+            return 0
+        else
+            print_colored "$RED" "Failed to install fastfetch package"
+            rm -f "$TEMP_DEB"
+            return 1
+        fi
+    else
+        print_colored "$RED" "Failed to download fastfetch"
+        return 1
+    fi
+}
+
 install_dependencies() {
-    DEPENDENCIES='bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig trash-cli'
+    # Remove fastfetch from standard dependencies for older Debian
+    if is_debian_old && [ "$PACKAGER" = "apt" ] || [ "$PACKAGER" = "nala" ]; then
+        DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli'
+    else
+        DEPENDENCIES='bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig trash-cli'
+    fi
+
     if ! command_exists nvim; then
         DEPENDENCIES="${DEPENDENCIES} neovim"
     fi
@@ -133,6 +190,11 @@ install_dependencies() {
             ${SUDO_CMD} ${PACKAGER} install -yq ${DEPENDENCIES}
             ;;
     esac
+
+    # Install fastfetch directly for older Debian systems
+    if is_debian_old && [ "$PACKAGER" = "apt" ] || [ "$PACKAGER" = "nala" ]; then
+        install_fastfetch_direct
+    fi
 
     install_font
 }
