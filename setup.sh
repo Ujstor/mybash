@@ -144,7 +144,7 @@ install_fastfetch_direct() {
 
 install_dependencies() {
     # Set base dependencies (without fastfetch)
-    DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli'
+    DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli eza'
 
     # Always install fastfetch directly for apt/nala systems
     INSTALL_FASTFETCH_DIRECT=0
