@@ -162,23 +162,23 @@ alias bd='cd "$OLDPWD"'
 alias rmd='/bin/rm  --recursive --force --verbose '
 
 # Alias's for multiple directory listing commands
-alias la='ls -Alh'                # show hidden files
-alias ls='ls -aFh --color=always' # add colors and file type extensions
-alias lx='ls -lXBh'               # sort by extension
-alias lk='ls -lSrh'               # sort by size
-alias lc='ls -ltcrh'              # sort by change time
-alias lu='ls -lturh'              # sort by access time
-alias lr='ls -lRh'                # recursive ls
-alias lt='ls -ltrh'               # sort by date
-alias lm='ls -alh |more'          # pipe through 'more'
-alias lw='ls -xAh'                # wide listing format
-alias ll='ls -Fls'                # long listing format
-alias labc='ls -lap'              # alphabetical sort
-alias lf="ls -l | egrep -v '^d'"  # files only
-alias ldir="ls -l | egrep '^d'"   # directories only
-alias lla='ls -Al'                # List and Hidden Files
-alias las='ls -A'                 # Hidden Files
-alias lls='ls -l'                 # List
+alias la='exa -Alh --color=always'                # show hidden files
+alias ls='exa -aF --color=always --icons'         # add colors and file type extensions
+alias lx='exa -la --sort=extension --color=always' # sort by extension
+alias lk='exa -la --sort=size --color=always'     # sort by size
+alias lc='exa -la --sort=changed --color=always'  # sort by change time
+alias lu='exa -la --sort=accessed --color=always' # sort by access time
+alias lr='exa -laR --color=always'                # recursive ls
+alias lt='exa -la --sort=modified --color=always' # sort by date
+alias lm='exa -alh --color=always | more'         # pipe through 'more'
+alias lw='exa -x --color=always'                  # wide listing format
+alias ll='exa -la --color=always --icons'         # long listing format
+alias labc='exa -la --sort=name --color=always'   # alphabetical sort
+alias lf='exa -la --color=always | grep -v "^d"'  # files only (approximate)
+alias ldir='exa -laD --color=always'              # directories only
+alias lla='exa -Al --color=always'                # List and Hidden Files
+alias las='exa -A --color=always'                 # Hidden Files
+alias lls='exa -l --color=always'                 # List
 
 # alias chmod commands
 alias mx='chmod a+x'
@@ -750,4 +750,3 @@ export NVM_DIR="$HOME/.config/nvm"
 
 export LIBVIRT_DEFAULT_URI='qemu:///system'
 export PATH=/home/ujstor/bin:$PATH
-

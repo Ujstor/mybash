@@ -5,7 +5,6 @@ RC=$(tput sgr0)
 RED=$(tput setaf 1)
 YELLOW=$(tput setaf 3)
 GREEN=$(tput setaf 2)
-
 LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
 PACKAGER=""
 SUDO_CMD=""
@@ -28,17 +27,14 @@ setup_directories() {
         mkdir -p "$LINUXTOOLBOXDIR"
         print_colored "$GREEN" "linuxtoolbox directory created: $LINUXTOOLBOXDIR"
     fi
-
     if [ -d "$LINUXTOOLBOXDIR/mybash" ]; then rm -rf "$LINUXTOOLBOXDIR/mybash"; fi
-
     print_colored "$YELLOW" "Cloning mybash repository into: $LINUXTOOLBOXDIR/mybash"
-    if git clone https://github.com/ChrisTitusTech/mybash "$LINUXTOOLBOXDIR/mybash"; then
+    if git clone https://github.com/ujstor/mybash "$LINUXTOOLBOXDIR/mybash"; then
         print_colored "$GREEN" "Successfully cloned mybash repository"
     else
         print_colored "$RED" "Failed to clone mybash repository"
         exit 1
     fi
-
     cd "$LINUXTOOLBOXDIR/mybash" || exit
 }
 
@@ -100,15 +96,7 @@ check_environment() {
     fi
 }
 
-is_debian_old() {
-    if [ -f /etc/debian_version ]; then
-        DEBIAN_VERSION=$(cat /etc/debian_version | cut -d. -f1)
-        if [ "$DEBIAN_VERSION" -lt 13 ] 2>/dev/null; then
-            return 0
-        fi
-    fi
-    return 1
-}
+
 
 install_fastfetch_direct() {
     if command_exists fastfetch; then
@@ -152,18 +140,24 @@ install_fastfetch_direct() {
 }
 
 install_dependencies() {
-    # Remove fastfetch from standard dependencies for older Debian
-    if is_debian_old && [ "$PACKAGER" = "apt" ] || [ "$PACKAGER" = "nala" ]; then
-        DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli'
+    # Set base dependencies (without fastfetch)
+    DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli exa'
+
+    # Always install fastfetch directly for apt/nala systems
+    INSTALL_FASTFETCH_DIRECT=0
+    if [ "$PACKAGER" = "apt" ] || [ "$PACKAGER" = "nala" ]; then
+        INSTALL_FASTFETCH_DIRECT=1
+        print_colored "$YELLOW" "Will install fastfetch directly via .deb package"
     else
-        DEPENDENCIES='bash bash-completion tar bat tree multitail fastfetch wget unzip fontconfig trash-cli'
+        # For non-Debian systems, add fastfetch to regular dependencies
+        DEPENDENCIES="${DEPENDENCIES} fastfetch"
     fi
 
     if ! command_exists nvim; then
         DEPENDENCIES="${DEPENDENCIES} neovim"
     fi
 
-    print_colored "$YELLOW" "Installing dependencies..."
+    print_colored "$YELLOW" "Installing dependencies: $DEPENDENCIES"
     case "$PACKAGER" in
         pacman)
             install_pacman_dependencies
@@ -191,8 +185,9 @@ install_dependencies() {
             ;;
     esac
 
-    # Install fastfetch directly for older Debian systems
-    if is_debian_old && [ "$PACKAGER" = "apt" ] || [ "$PACKAGER" = "nala" ]; then
+    # Install fastfetch directly for apt/nala systems
+    if [ "$INSTALL_FASTFETCH_DIRECT" = "1" ]; then
+        print_colored "$YELLOW" "Installing fastfetch via direct download..."
         install_fastfetch_direct
     fi
 
@@ -208,6 +203,7 @@ install_pacman_dependencies() {
     else
         printf "AUR helper already installed\n"
     fi
+
     if command_exists yay; then
         AUR_HELPER="yay"
     elif command_exists paru; then
@@ -216,6 +212,7 @@ install_pacman_dependencies() {
         printf "No AUR helper found. Please install yay or paru.\n"
         exit 1
     fi
+
     ${AUR_HELPER} --noconfirm -S ${DEPENDENCIES}
 }
 
@@ -227,6 +224,7 @@ install_font() {
         printf "Installing font '%s'\n" "$FONT_NAME"
         FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.zip"
         FONT_DIR="$HOME/.local/share/fonts"
+
         if wget -q --spider "$FONT_URL"; then
             TEMP_DIR=$(mktemp -d)
             wget -q $FONT_URL -O "$TEMP_DIR"/"${FONT_NAME}".zip
@@ -332,3 +330,4 @@ if link_config; then
 else
     print_colored "$RED" "Something went wrong!"
 fi
+
