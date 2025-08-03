@@ -353,14 +353,14 @@ up() {
 }
 
 # Automatically do an ls after each cd, z, or zoxide
-# cd ()
-# {
-# 	if [ -n "$1" ]; then
-# 		builtin cd "$@" && ls -la
-# 	else
-# 		builtin cd ~ && ls -la
-# 	fi
-# }
+cd ()
+{
+	if [ -n "$1" ]; then
+		builtin cd "$@" && ls -la
+	else
+		builtin cd ~ && ls -la
+	fi
+}
 
 # Returns the last 2 fields of the working directory
 pwdtail() {
@@ -597,9 +597,9 @@ trim() {
 	echo -n "$var"
 }
 
-# _z_cd() {
-#     cd "$@" || return "$?"
-# }
+_z_cd() {
+    cd "$@" || return "$?"
+}
 
 function hb {
     if [ $# -eq 0 ]; then
