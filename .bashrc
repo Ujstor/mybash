@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 iatest=$(expr index "$-" i)
 
+export PATH="/usr/local/go/bin:$HOME/go/bin:/usr/local/bin:$HOME/.local/bin:$HOME/bin:$PATH"
+
 #######################################################
 # SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
 #######################################################
