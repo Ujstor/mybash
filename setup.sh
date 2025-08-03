@@ -35,7 +35,10 @@ setup_directories() {
         print_colored "$RED" "Failed to clone mybash repository"
         exit 1
     fi
+
+    # Change to the cloned directory for any relative operations
     cd "$LINUXTOOLBOXDIR/mybash" || exit
+    print_colored "$YELLOW" "Changed working directory to: $(pwd)"
 }
 
 check_environment() {
@@ -47,7 +50,7 @@ check_environment() {
             exit 1
         fi
     done
- 
+
     # Determine package manager
     PACKAGEMANAGER='nala apt dnf yum pacman zypper emerge xbps-install nix-env'
     for pgm in $PACKAGEMANAGER; do
@@ -141,7 +144,7 @@ install_fastfetch_direct() {
 
 install_dependencies() {
     # Set base dependencies (without fastfetch)
-    DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli eza'
+    DEPENDENCIES='bash bash-completion tar bat tree multitail wget unzip fontconfig trash-cli'
 
     # Always install fastfetch directly for apt/nala systems
     INSTALL_FASTFETCH_DIRECT=0
@@ -152,7 +155,7 @@ install_dependencies() {
         # For non-Debian systems, add fastfetch to regular dependencies
         DEPENDENCIES="${DEPENDENCIES} fastfetch"
     fi
- 
+
     if ! command_exists nvim; then
         DEPENDENCIES="${DEPENDENCIES} neovim"
     fi
@@ -224,7 +227,7 @@ install_font() {
         printf "Installing font '%s'\n" "$FONT_NAME"
         FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.zip"
         FONT_DIR="$HOME/.local/share/fonts"
-        
+
         if wget -q --spider "$FONT_URL"; then
             TEMP_DIR=$(mktemp -d)
             wget -q $FONT_URL -O "$TEMP_DIR"/"${FONT_NAME}".zip
@@ -278,13 +281,14 @@ create_fastfetch_config() {
     USER_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
     CONFIG_DIR="$USER_HOME/.config/fastfetch"
     CONFIG_FILE="$CONFIG_DIR/config.jsonc"
-
+    
     # Use the cloned repository path instead of the script location
     REPO_PATH="$LINUXTOOLBOXDIR/mybash"
-
+    
     mkdir -p "$CONFIG_DIR"
     [ -e "$CONFIG_FILE" ] && rm -f "$CONFIG_FILE"
-
+    
+    print_colored "$YELLOW" "Creating fastfetch config symlink..."
     if ! ln -svf "$REPO_PATH/config.jsonc" "$CONFIG_FILE"; then
         print_colored "$RED" "Failed to create symbolic link for fastfetch config"
         exit 1
@@ -298,7 +302,15 @@ link_config() {
 
     # Use the cloned repository path instead of the script location
     REPO_PATH="$LINUXTOOLBOXDIR/mybash"
- 
+
+    print_colored "$YELLOW" "Configuring bash settings from $REPO_PATH"
+
+    # Check if the .bashrc file exists in the repository
+    if [ ! -f "$REPO_PATH/.bashrc" ]; then
+        print_colored "$RED" "Cannot find .bashrc in $REPO_PATH"
+        exit 1
+    fi
+
     if [ -e "$OLD_BASHRC" ]; then
         print_colored "$YELLOW" "Moving old bash config file to $USER_HOME/.bashrc.bak"
         if ! mv "$OLD_BASHRC" "$USER_HOME/.bashrc.bak"; then
@@ -308,11 +320,19 @@ link_config() {
     fi
 
     print_colored "$YELLOW" "Linking new bash config file..."
-    if ! ln -svf "$REPO_PATH/.bashrc" "$USER_HOME/.bashrc" || ! ln -svf "$REPO_PATH/starship.toml" "$USER_HOME/.config/starship.toml"; then
-        print_colored "$RED" "Failed to create symbolic links"
+    if ! ln -svf "$REPO_PATH/.bashrc" "$USER_HOME/.bashrc"; then
+        print_colored "$RED" "Failed to create symbolic link for .bashrc"
         exit 1
     fi
 
+    # Create .config directory if it doesn't exist
+    mkdir -p "$USER_HOME/.config"
+
+    if ! ln -svf "$REPO_PATH/starship.toml" "$USER_HOME/.config/starship.toml"; then
+        print_colored "$RED" "Failed to create symbolic link for starship.toml"
+        exit 1
+    fi
+ 
     # Create .bash_profile if it doesn't exist
     if [ ! -f "$BASH_PROFILE" ]; then
         print_colored "$YELLOW" "Creating .bash_profile..."
@@ -321,6 +341,8 @@ link_config() {
     else
         print_colored "$YELLOW" ".bash_profile already exists. Please ensure it sources .bashrc if needed."
     fi
+
+    print_colored "$GREEN" "Configuration files linked successfully!"
 }
 
 # Main execution
