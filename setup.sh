@@ -47,7 +47,7 @@ check_environment() {
             exit 1
         fi
     done
-
+ 
     # Determine package manager
     PACKAGEMANAGER='nala apt dnf yum pacman zypper emerge xbps-install nix-env'
     for pgm in $PACKAGEMANAGER; do
@@ -152,7 +152,7 @@ install_dependencies() {
         # For non-Debian systems, add fastfetch to regular dependencies
         DEPENDENCIES="${DEPENDENCIES} fastfetch"
     fi
-
+ 
     if ! command_exists nvim; then
         DEPENDENCIES="${DEPENDENCIES} neovim"
     fi
@@ -224,7 +224,7 @@ install_font() {
         printf "Installing font '%s'\n" "$FONT_NAME"
         FONT_URL="https://github.com/ryanoasis/nerd-fonts/releases/latest/download/Meslo.zip"
         FONT_DIR="$HOME/.local/share/fonts"
-
+        
         if wget -q --spider "$FONT_URL"; then
             TEMP_DIR=$(mktemp -d)
             wget -q $FONT_URL -O "$TEMP_DIR"/"${FONT_NAME}".zip
@@ -279,10 +279,13 @@ create_fastfetch_config() {
     CONFIG_DIR="$USER_HOME/.config/fastfetch"
     CONFIG_FILE="$CONFIG_DIR/config.jsonc"
 
+    # Use the cloned repository path instead of the script location
+    REPO_PATH="$LINUXTOOLBOXDIR/mybash"
+
     mkdir -p "$CONFIG_DIR"
     [ -e "$CONFIG_FILE" ] && rm -f "$CONFIG_FILE"
 
-    if ! ln -svf "$GITPATH/config.jsonc" "$CONFIG_FILE"; then
+    if ! ln -svf "$REPO_PATH/config.jsonc" "$CONFIG_FILE"; then
         print_colored "$RED" "Failed to create symbolic link for fastfetch config"
         exit 1
     fi
@@ -292,6 +295,9 @@ link_config() {
     USER_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
     OLD_BASHRC="$USER_HOME/.bashrc"
     BASH_PROFILE="$USER_HOME/.bash_profile"
+
+    # Use the cloned repository path instead of the script location
+    REPO_PATH="$LINUXTOOLBOXDIR/mybash"
  
     if [ -e "$OLD_BASHRC" ]; then
         print_colored "$YELLOW" "Moving old bash config file to $USER_HOME/.bashrc.bak"
@@ -302,7 +308,7 @@ link_config() {
     fi
 
     print_colored "$YELLOW" "Linking new bash config file..."
-    if ! ln -svf "$GITPATH/.bashrc" "$USER_HOME/.bashrc" || ! ln -svf "$GITPATH/starship.toml" "$USER_HOME/.config/starship.toml"; then
+    if ! ln -svf "$REPO_PATH/.bashrc" "$USER_HOME/.bashrc" || ! ln -svf "$REPO_PATH/starship.toml" "$USER_HOME/.config/starship.toml"; then
         print_colored "$RED" "Failed to create symbolic links"
         exit 1
     fi
@@ -330,4 +336,3 @@ if link_config; then
 else
     print_colored "$RED" "Something went wrong!"
 fi
-
