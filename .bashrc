@@ -162,23 +162,23 @@ alias bd='cd "$OLDPWD"'
 alias rmd='/bin/rm  --recursive --force --verbose '
 
 # Alias's for multiple directory listing commands
-alias la='exa -Alh --color=always'                # show hidden files
-alias ls='exa -aF --color=always --icons'         # add colors and file type extensions
-alias lx='exa -la --sort=extension --color=always' # sort by extension
-alias lk='exa -la --sort=size --color=always'     # sort by size
-alias lc='exa -la --sort=changed --color=always'  # sort by change time
-alias lu='exa -la --sort=accessed --color=always' # sort by access time
-alias lr='exa -laR --color=always'                # recursive ls
-alias lt='exa -la --sort=modified --color=always' # sort by date
-alias lm='exa -alh --color=always | more'         # pipe through 'more'
-alias lw='exa -x --color=always'                  # wide listing format
-alias ll='exa -la --color=always --icons'         # long listing format
-alias labc='exa -la --sort=name --color=always'   # alphabetical sort
-alias lf='exa -la --color=always | grep -v "^d"'  # files only (approximate)
-alias ldir='exa -laD --color=always'              # directories only
-alias lla='exa -Al --color=always'                # List and Hidden Files
-alias las='exa -A --color=always'                 # Hidden Files
-alias lls='exa -l --color=always'                 # List
+alias la='eza -Alh --color=always'                # show hidden files
+alias ls='eza -aF --color=always --icons'         # add colors and file type extensions
+alias lx='eza -la --sort=extension --color=always' # sort by extension
+alias lk='eza -la --sort=size --color=always'     # sort by size
+alias lc='eza -la --sort=changed --color=always'  # sort by change time
+alias lu='eza -la --sort=accessed --color=always' # sort by access time
+alias lr='eza -laR --color=always'                # recursive ls
+alias lt='eza -la --sort=modified --color=always' # sort by date
+alias lm='eza -alh --color=always | more'         # pipe through 'more'
+alias lw='eza -x --color=always'                  # wide listing format
+alias ll='eza -la --color=always --icons'         # long listing format
+alias labc='eza -la --sort=name --color=always'   # alphabetical sort
+alias lf='eza -la --color=always | grep -v "^d"'  # files only (approximate)
+alias ldir='eza -laD --color=always'              # directories only
+alias lla='eza -Al --color=always'                # List and Hidden Files
+alias las='eza -A --color=always'                 # Hidden Files
+alias lls='eza -l --color=always'                 # List
 
 # alias chmod commands
 alias mx='chmod a+x'
