@@ -736,6 +736,23 @@ check_nvme_temps() {
     done
 }
 
+
+run_in_all_dirs() {
+  if [ $# -eq 0 ]; then
+      echo "Usage: run_in_all_dirs <command> [args...]"
+      echo "Example: run_in_all_dirs git status"
+      return 1
+  fi
+
+  for dir in */; do
+      if [ -d "$dir" ]; then
+	  echo "Executing in: $dir"
+	  (cd "$dir" && "$@")
+	  echo "---"
+      fi
+  done
+}
+
 alias nvmetemp='check_nvme_temps'
 alias c='clear'
 alias tf='terraform'
