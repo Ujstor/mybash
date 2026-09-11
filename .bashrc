@@ -1,95 +1,134 @@
 #!/usr/bin/env bash
-iatest=$(expr index "$-" i)
-
-export PATH="/usr/local/go/bin:$HOME/go/bin:/usr/local/bin:$HOME/.local/bin:$HOME/bin:$PATH"
-
 #######################################################
-# SOURCED ALIAS'S AND SCRIPTS BY zachbrowne.me
-#######################################################
-
-# alias fastfetch='fastfetch -c ~/config.jsonc'
-
-# if [ -f /usr/bin/fastfetch ]; then
-# 	fastfetch -c ~/config.jsonc
-# fi
-
-# Source global definitions
-if [ -f /etc/bashrc ]; then
-	. /etc/bashrc
-fi
-
-# Enable bash programmable completion features in interactive shells
-if [ -f /usr/share/bash-completion/bash_completion ]; then
-	. /usr/share/bash-completion/bash_completion
-elif [ -f /etc/bash_completion ]; then
-	. /etc/bash_completion
-fi
-
-#######################################################
-# EXPORTS
+# mybash — bash config for headless DevOps / k8s boxes
+#
+# Rules this file follows:
+#   * nothing here may require a display (no X11, no desktop, no GUI tools)
+#   * every optional tool is guarded — a missing tool must never print an
+#     error at shell start, and must never break a core command (ls, cd,
+#     grep, rm, cat, kubectl)
+#   * no hardcoded usernames, hostnames or LAN addresses
 #######################################################
 
-# Disable the bell
-if [[ $iatest -gt 0 ]]; then bind "set bell-style visible"; fi
+#######################################################
+# HELPERS
+#######################################################
 
-# Expand the history size
-export HISTFILESIZE=1000000
-export HISTSIZE=50000
-export HISTTIMEFORMAT="%F %T" # add timestamp to history
+# Is a command available?
+_have() { command -v "$1" >/dev/null 2>&1; }
 
-# Don't put duplicate lines in the history and do not add lines that start with a space
-export HISTCONTROL=erasedups:ignoredups:ignorespace
+# Source a file only if it exists.
+_source_if() { [ -r "$1" ] && . "$1"; }
 
-# Check the window size after each command and, if necessary, update the values of LINES and COLUMNS
-shopt -s checkwinsize
+# Append to PATH only if the dir exists and is not already there.
+_path_add() {
+	[ -d "$1" ] || return 0
+	case ":$PATH:" in
+	*":$1:"*) ;;
+	*) PATH="$1:$PATH" ;;
+	esac
+}
 
-# Causes bash to append to history instead of overwriting it so if you start a new terminal, you have old session history
-shopt -s histappend
-PROMPT_COMMAND='history -a'
+#######################################################
+# PATH
+#######################################################
 
-# set up XDG folders
+_path_add "/usr/local/go/bin"
+_path_add "$HOME/go/bin"
+_path_add "/usr/local/bin"
+_path_add "$HOME/.local/bin"
+_path_add "$HOME/bin"
+_path_add "$HOME/.cargo/bin"
+_path_add "${KREW_ROOT:-$HOME/.krew}/bin"
+_path_add "$HOME/.pulumi/bin"
+_path_add "$HOME/.sst/bin"
+_path_add "/opt/nvim-linux64/bin"
+export PATH
+
+export GOPATH="$HOME/go"
+
 export XDG_DATA_HOME="$HOME/.local/share"
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_STATE_HOME="$HOME/.local/state"
 export XDG_CACHE_HOME="$HOME/.cache"
-
-# Seeing as other scripts will use it might as well export it
 export LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
 
-# Allow ctrl-S for history navigation (with ctrl-R)
-[[ $- == *i* ]] && stty -ixon
+#######################################################
+# Everything below this point is interactive-only.
+# PATH and exports stay above it so that `ssh host '<command>'` still
+# finds go/krew/local binaries.
+#######################################################
+case $- in
+	*i*) ;;
+	*) return ;;
+esac
 
-# Ignore case on auto-completion
-# Note: bind used instead of sticking these in .inputrc
-if [[ $iatest -gt 0 ]]; then bind "set completion-ignore-case on"; fi
+#######################################################
+# SOURCED DEFINITIONS
+#######################################################
 
-# Show auto-completion list automatically, without double tab
-if [[ $iatest -gt 0 ]]; then bind "set show-all-if-ambiguous On"; fi
+_source_if /etc/bashrc
 
-# Set the default editor
-export EDITOR=nvim
-export VISUAL=nvim
-alias pico='edit'
-alias spico='sedit'
-alias nano='edit'
-alias snano='sedit'
-
-# To have colors for ls and all grep commands such as grep, egrep and zgrep
-export CLICOLOR=1
-export LS_COLORS='no=00:fi=00:di=00;34:ln=01;36:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arj=01;31:*.taz=01;31:*.lzh=01;31:*.zip=01;31:*.z=01;31:*.Z=01;31:*.gz=01;31:*.bz2=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.jpg=01;35:*.jpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.avi=01;35:*.fli=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.ogg=01;35:*.mp3=01;35:*.wav=01;35:*.xml=00;31:'
-#export GREP_OPTIONS='--color=auto' #deprecated
-
-# Check if ripgrep is installed
-if command -v rg &> /dev/null; then
-    # Alias grep to rg if ripgrep is installed
-    alias grep='rg'
+# Programmable completion
+if [ -r /usr/share/bash-completion/bash_completion ]; then
+	. /usr/share/bash-completion/bash_completion
 else
-    # Alias grep to /usr/bin/grep with GREP_OPTIONS if ripgrep is not installed
-    alias grep="/usr/bin/grep $GREP_OPTIONS"
+	_source_if /etc/bash_completion
 fi
-unset GREP_OPTIONS
 
-# Color for manpages in less makes manpages a little easier to read
+#######################################################
+# HISTORY / SHELL OPTIONS
+#######################################################
+
+export HISTFILESIZE=1000000
+export HISTSIZE=50000
+export HISTTIMEFORMAT="%F %T "
+export HISTCONTROL=erasedups:ignoredups:ignorespace
+
+shopt -s checkwinsize
+shopt -s histappend
+PROMPT_COMMAND='history -a'
+
+# Free ctrl-S for forward history search
+stty -ixon 2>/dev/null
+
+# Readline behaviour
+bind "set bell-style visible" 2>/dev/null
+bind "set completion-ignore-case on" 2>/dev/null
+bind "set show-all-if-ambiguous On" 2>/dev/null
+
+#######################################################
+# EDITOR
+#######################################################
+
+if _have nvim; then
+	export EDITOR=nvim
+	export VISUAL=nvim
+	alias vi='nvim'
+	alias vis='nvim "+set si"'
+elif _have vim; then
+	export EDITOR=vim
+	export VISUAL=vim
+else
+	export EDITOR=vi
+	export VISUAL=vi
+fi
+
+# Open a file as root with the editor you actually configured.
+sedit() { sudo -E "${EDITOR:-vi}" "$@"; }
+
+#######################################################
+# COLOURS
+#######################################################
+
+export CLICOLOR=1
+export LS_COLORS='no=00:fi=00:di=00;34:ln=01;36:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:ex=01;32:*.tar=01;31:*.tgz=01;31:*.zip=01;31:*.gz=01;31:*.bz2=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.log=00;32:*.yaml=00;33:*.yml=00;33:*.json=00;33:*.tf=00;35:*.xml=00;31:'
+
+alias grep='grep --color=auto'
+alias egrep='grep -E --color=auto'
+alias fgrep='grep -F --color=auto'
+
+# Colourised man pages
 export LESS_TERMCAP_mb=$'\E[01;31m'
 export LESS_TERMCAP_md=$'\E[01;31m'
 export LESS_TERMCAP_me=$'\E[0m'
@@ -98,130 +137,116 @@ export LESS_TERMCAP_so=$'\E[01;44;33m'
 export LESS_TERMCAP_ue=$'\E[0m'
 export LESS_TERMCAP_us=$'\E[01;32m'
 
-#######################################################
-# MACHINE SPECIFIC ALIAS'S
-#######################################################
-
-# Alias's for SSH
-# alias SERVERNAME='ssh YOURWEBSITE.com -l USERNAME -p PORTNUMBERHERE'
-
-# Alias's to change the directory
-alias web='cd /var/www/html'
-
-# Alias's to mount ISO files
-# mount -o loop /home/NAMEOFISO.iso /home/ISOMOUNTDIR/
-# umount /home/NAMEOFISO.iso
-# (Both commands done as root only.)
+# bat is "bat" everywhere except Debian/Ubuntu, where it is "batcat".
+# Detect the binary, do not guess from the distro.
+if _have batcat; then
+	alias cat='batcat'
+	alias bat='batcat'
+elif _have bat; then
+	alias cat='bat'
+fi
 
 #######################################################
-# GENERAL ALIAS'S
+# LISTING
 #######################################################
-# To temporarily bypass an alias, we precede the command with a \
-# EG: the ls command is aliased, but to use the normal ls command you would type \ls
 
-# Add an "alert" alias for long running commands.  Use like so:
-#   sleep 10; alert
-alias alert='notify-send --urgency=low -i "$([ $? = 0 ] && echo terminal || echo error)" "$(history|tail -n1|sed -e '\''s/^\s*[0-9]\+\s*//;s/[;&|]\s*alert$//'\'')"'
+# Runtime dispatch, NOT an alias: aliases are expanded when a function is
+# *parsed*, so `alias ls=eza` would bake eza into cd() and break every cd
+# on a box without eza.
+if _have eza; then
+	_ls_long_all() { eza -la --color=always --icons "$@"; }
+	alias ls='eza -aF --color=always --icons'
+	alias ll='eza -la --color=always --icons'
+	alias la='eza -Alh --color=always'
+	alias lx='eza -la --sort=extension --color=always'
+	alias lk='eza -la --sort=size --color=always'
+	alias lc='eza -la --sort=changed --color=always'
+	alias lu='eza -la --sort=accessed --color=always'
+	alias lr='eza -laR --color=always'
+	alias lt='eza -la --sort=modified --color=always'
+	alias lm='eza -alh --color=always | more'
+	alias lw='eza -x --color=always'
+	alias labc='eza -la --sort=name --color=always'
+	alias ldir='eza -laD --color=always'
+	alias lla='eza -Al --color=always'
+	alias las='eza -A --color=always'
+	alias lls='eza -l --color=always'
+	alias tree='eza --tree --color=always'
+else
+	_ls_long_all() { command ls -la --color=auto "$@"; }
+	alias ls='ls --color=auto -F'
+	alias ll='ls -la --color=auto'
+	alias la='ls -Alh --color=auto'
+	alias lx='ls -laX --color=auto'
+	alias lk='ls -laS --color=auto'
+	alias lc='ls -lac --color=auto'
+	alias lu='ls -lau --color=auto'
+	alias lr='ls -laR --color=auto'
+	alias lt='ls -lat --color=auto'
+	alias lm='ls -alh --color=auto | more'
+	alias lw='ls -x --color=auto'
+	alias labc='ls -la --color=auto'
+	alias ldir='ls -la --color=auto -d */'
+	alias lla='ls -Al --color=auto'
+	alias las='ls -A --color=auto'
+	alias lls='ls -l --color=auto'
+	_have tree && alias tree='tree -CAhF --dirsfirst'
+fi
+# `command tree`, not `tree`: when eza is present the alias above makes `tree`
+# mean `eza --tree --color=always`, and bash re-expands an alias's first word,
+# so a bare `tree -CAFd` here became `eza … -CAFd` -> 'Unknown argument -C'.
+_have tree && alias treed='command tree -CAFd'
 
-# Edit this .bashrc file
-alias ebrc='edit ~/.bashrc'
+#######################################################
+# GENERAL ALIASES
+#######################################################
 
-# Show help for this .bashrc file
-alias hlp='less ~/.bashrc_help'
-
-# alias to show the date
+alias ebrc='${EDITOR:-vi} ~/.bashrc'
 alias da='date "+%Y-%m-%d %A %T %Z"'
+alias cls='clear'
+alias c='clear'
 
-# Alias's to modified commands
 alias cp='cp -i'
 alias mv='mv -i'
-alias rm='trash -v'
 alias mkdir='mkdir -p'
 alias ps='ps auxf'
 alias ping='ping -c 10'
 alias less='less -R'
-alias cls='clear'
-alias apt-get='sudo apt-get'
-alias multitail='multitail --no-repeat -c'
-alias freshclam='sudo freshclam'
-alias vi='nvim'
-alias svi='sudo vi'
-alias vis='nvim "+set si"'
 
+# rm -> trash only when trash-cli is actually installed, otherwise rm stays rm.
+if _have trash; then
+	alias rm='trash -v'
+fi
+# Always-real recursive delete, regardless of the trash alias.
+alias rmd='/bin/rm --recursive --force --verbose'
 
-# Change directory aliases
+_have multitail && alias multitail='multitail --no-repeat -c'
+
+# Directory navigation
 alias home='cd ~'
 alias cd..='cd ..'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
 alias .....='cd ../../../..'
-
-# cd into the old directory
 alias bd='cd "$OLDPWD"'
 
-# Remove a directory and all files
-alias rmd='/bin/rm  --recursive --force --verbose '
-
-# Alias's for multiple directory listing commands
-alias la='eza -Alh --color=always'                # show hidden files
-alias ls='eza -aF --color=always --icons'         # add colors and file type extensions
-alias lx='eza -la --sort=extension --color=always' # sort by extension
-alias lk='eza -la --sort=size --color=always'     # sort by size
-alias lc='eza -la --sort=changed --color=always'  # sort by change time
-alias lu='eza -la --sort=accessed --color=always' # sort by access time
-alias lr='eza -laR --color=always'                # recursive ls
-alias lt='eza -la --sort=modified --color=always' # sort by date
-alias lm='eza -alh --color=always | more'         # pipe through 'more'
-alias lw='eza -x --color=always'                  # wide listing format
-alias ll='eza -la --color=always --icons'         # long listing format
-alias labc='eza -la --sort=name --color=always'   # alphabetical sort
-alias lf='eza -la --color=always | grep -v "^d"'  # files only (approximate)
-alias ldir='eza -laD --color=always'              # directories only
-alias lla='eza -Al --color=always'                # List and Hidden Files
-alias las='eza -A --color=always'                 # Hidden Files
-alias lls='eza -l --color=always'                 # List
-
-# alias chmod commands
 alias mx='chmod a+x'
-alias 000='chmod -R 000'
 alias 644='chmod -R 644'
-alias 666='chmod -R 666'
 alias 755='chmod -R 755'
-alias 777='chmod -R 777'
 
-# Search command line history
-alias h="history | grep "
-
-# Search running processes
-alias p="ps aux | grep "
+alias h='history | grep '
+alias p='ps aux | grep '
 alias topcpu="/bin/ps -eo pcpu,pid,user,args | sort -k 1 -r | head -10"
-
-# Search files in the current folder
-alias f="find . | grep "
-
-# Count all files (recursively) in the current folder
+alias f='find . | grep '
 alias countfiles="for t in files links directories; do echo \`find . -type \${t:0:1} | wc -l\` \$t; done 2> /dev/null"
-
-# To see if a command is aliased, a file, or a built-in command
 alias checkcommand="type -t"
 
-# Show open ports
-alias openports='netstat -nape --inet'
-
-# Alias's for safe and forced reboots
-alias rebootsafe='sudo shutdown -r now'
-alias rebootforce='sudo shutdown -r -n now'
-
-# Alias's to show disk space and space used in a folder
-alias diskspace="du -S | sort -n -r |more"
+alias diskspace="du -S | sort -n -r | more"
 alias folders='du -h --max-depth=1'
 alias folderssort='find . -maxdepth 1 -type d -print0 | xargs -0 du -sk | sort -rn'
-alias tree='tree -CAhF --dirsfirst'
-alias treed='tree -CAFd'
 alias mountedinfo='df -hT'
 
-# Alias's for archives
 alias mktar='tar -cvf'
 alias mkbz2='tar -cvjf'
 alias mkgz='tar -cvzf'
@@ -229,27 +254,16 @@ alias untar='tar -xvf'
 alias unbz2='tar -xvjf'
 alias ungz='tar -xvzf'
 
-# Show all logs in /var/log
-alias logs="sudo find /var/log -type f -exec file {} \; | grep 'text' | cut -d' ' -f1 | sed -e's/:$//g' | grep -v '[0-9]$' | xargs tail -f"
-
-# SHA1
+alias logs="sudo find /var/log -type f -exec file {} \; | grep 'text' | cut -d' ' -f1 | sed -e's/:\$//g' | grep -v '[0-9]\$' | xargs tail -f"
 alias sha1='openssl sha1'
 
-alias clickpaste='sleep 3; xdotool type "$(xclip -o -selection clipboard)"'
-
-# SSH
-alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
-
-# Used ports
+# Ports: ss is present on every modern systemd box; netstat often is not.
 alias ports='ss -tulpn'
+alias openports='ss -tulpn'
 
-#moniteroff
-alias monitoroff='xset dpms force off'
+alias rebootsafe='sudo shutdown -r now'
 
-# KITTY - alias to be able to use kitty features when connecting to remote servers(e.g use tmux on remote server)
-alias kssh="kitty +kitten ssh"
-
-# alias to cleanup unused docker containers, images, networks, and volumes
+alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
 
 alias docker-clean=' \
   docker container prune -f ; \
@@ -258,24 +272,28 @@ alias docker-clean=' \
   docker volume prune -f '
 
 #######################################################
-# SPECIAL FUNCTIONS
+# FUNCTIONS
 #######################################################
-# Extracts any archive(s) (if unp isn't installed)
+
+# Extract any archive
 extract() {
 	for archive in "$@"; do
 		if [ -f "$archive" ]; then
 			case $archive in
-			*.tar.bz2) tar xvjf $archive ;;
-			*.tar.gz) tar xvzf $archive ;;
-			*.bz2) bunzip2 $archive ;;
-			*.rar) rar x $archive ;;
-			*.gz) gunzip $archive ;;
-			*.tar) tar xvf $archive ;;
-			*.tbz2) tar xvjf $archive ;;
-			*.tgz) tar xvzf $archive ;;
-			*.zip) unzip $archive ;;
-			*.Z) uncompress $archive ;;
-			*.7z) 7z x $archive ;;
+			*.tar.bz2) tar xvjf "$archive" ;;
+			*.tar.gz) tar xvzf "$archive" ;;
+			*.tar.xz) tar xvJf "$archive" ;;
+			*.tar.zst) tar --zstd -xvf "$archive" ;;
+			*.bz2) bunzip2 "$archive" ;;
+			*.rar) unrar x "$archive" ;;
+			*.gz) gunzip "$archive" ;;
+			*.tar) tar xvf "$archive" ;;
+			*.tbz2) tar xvjf "$archive" ;;
+			*.tgz) tar xvzf "$archive" ;;
+			*.zip) unzip "$archive" ;;
+			*.Z) uncompress "$archive" ;;
+			*.7z) 7z x "$archive" ;;
+			*.zst) unzstd "$archive" ;;
 			*) echo "don't know how to extract '$archive'..." ;;
 			esac
 		else
@@ -284,488 +302,161 @@ extract() {
 	done
 }
 
-# Searches for text in all files in the current folder
+# Search for text in every file under the current directory.
+# `command grep` is deliberate: it must not pick up an alias, and it must
+# never become ripgrep — `rg -r` means --replace, which silently rewrites
+# the matched text instead of recursing.
 ftext() {
-	# -i case-insensitive
-	# -I ignore binary files
-	# -H causes filename to be printed
-	# -r recursive search
-	# -n causes line number to be printed
-	# optional: -F treat search term as a literal, not a regular expression
-	# optional: -l only print filenames and not the matching lines ex. grep -irl "$1" *
-	grep -iIHrn --color=always "$1" . | less -r
+	command grep -iIHrn --color=always "$1" . | command less -r
 }
 
-# Copy file with a progress bar
-cpp() {
-    set -e
-    strace -q -ewrite cp -- "${1}" "${2}" 2>&1 |
-    awk '{
-        count += $NF
-        if (count % 10 == 0) {
-            percent = count / total_size * 100
-            printf "%3d%% [", percent
-            for (i=0;i<=percent;i++)
-                printf "="
-            printf ">"
-            for (i=percent;i<100;i++)
-                printf " "
-            printf "]\r"
-        }
-    }
-    END { print "" }' total_size="$(stat -c '%s' "${1}")" count=0
-}
-
-# Copy and go to the directory
-cpg() {
-	if [ -d "$2" ]; then
-		cp "$1" "$2" && cd "$2"
-	else
-		cp "$1" "$2"
-	fi
-}
-
-# Move and go to the directory
-mvg() {
-	if [ -d "$2" ]; then
-		mv "$1" "$2" && cd "$2"
-	else
-		mv "$1" "$2"
-	fi
-}
-
-# Create and go to the directory
+# Create a directory and cd into it
 mkdirg() {
-	mkdir -p "$1"
-	cd "$1"
+	mkdir -p "$1" && cd "$1" || return
 }
 
-# Goes up a specified number of directories  (i.e. up 4)
+# Go up N directories: up 4
 up() {
-	local d=""
-	limit=$1
+	local limit=${1:-1} d=""
+	local i
 	for ((i = 1; i <= limit; i++)); do
-		d=$d/..
+		d="../$d"
 	done
-	d=$(echo $d | sed 's/^\///')
-	if [ -z "$d" ]; then
-		d=..
-	fi
-	cd $d
+	cd "${d:-..}" || return
 }
 
-# Automatically do an ls after each cd, z, or zoxide
-cd ()
-{
+# ls after every cd. Uses _ls_long_all, so it works with or without eza.
+cd() {
 	if [ -n "$1" ]; then
-		builtin cd "$@" && ls -la
+		builtin cd "$@" && _ls_long_all
 	else
-		builtin cd ~ && ls -la
+		builtin cd ~ && _ls_long_all
 	fi
 }
 
-# Returns the last 2 fields of the working directory
-pwdtail() {
-	pwd | awk -F/ '{nlast = NF -1;print $nlast"/"$NF}'
-}
-
-# Show the current distribution
-distribution () {
-    local dtype="unknown"  # Default to unknown
-
-    # Use /etc/os-release for modern distro identification
-    if [ -r /etc/os-release ]; then
-        source /etc/os-release
-        case $ID in
-            fedora|rhel|centos)
-                dtype="redhat"
-                ;;
-            sles|opensuse*)
-                dtype="suse"
-                ;;
-            ubuntu|debian)
-                dtype="debian"
-                ;;
-            gentoo)
-                dtype="gentoo"
-                ;;
-            arch|manjaro)
-                dtype="arch"
-                ;;
-            slackware)
-                dtype="slackware"
-                ;;
-            *)
-                # Check ID_LIKE only if dtype is still unknown
-                if [ -n "$ID_LIKE" ]; then
-                    case $ID_LIKE in
-                        *fedora*|*rhel*|*centos*)
-                            dtype="redhat"
-                            ;;
-                        *sles*|*opensuse*)
-                            dtype="suse"
-                            ;;
-                        *ubuntu*|*debian*)
-                            dtype="debian"
-                            ;;
-                        *gentoo*)
-                            dtype="gentoo"
-                            ;;
-                        *arch*)
-                            dtype="arch"
-                            ;;
-                        *slackware*)
-                            dtype="slackware"
-                            ;;
-                    esac
-                fi
-
-                # If ID or ID_LIKE is not recognized, keep dtype as unknown
-                ;;
-        esac
-    fi
-
-    echo $dtype
-}
-
-
-DISTRIBUTION=$(distribution)
-if [ "$DISTRIBUTION" = "redhat" ] || [ "$DISTRIBUTION" = "arch" ]; then
-      alias cat='bat'
-else
-      alias cat='batcat'
-fi 
-
-# Show the current version of the operating system
-ver() {
-    local dtype
-    dtype=$(distribution)
-
-    case $dtype in
-        "redhat")
-            if [ -s /etc/redhat-release ]; then
-                cat /etc/redhat-release
-            else
-                cat /etc/issue
-            fi
-            uname -a
-            ;;
-        "suse")
-            cat /etc/SuSE-release
-            ;;
-        "debian")
-            lsb_release -a
-            ;;
-        "gentoo")
-            cat /etc/gentoo-release
-            ;;
-        "arch")
-            cat /etc/os-release
-            ;;
-        "slackware")
-            cat /etc/slackware-version
-            ;;
-        *)
-            if [ -s /etc/issue ]; then
-                cat /etc/issue
-            else
-                echo "Error: Unknown distribution"
-                exit 1
-            fi
-            ;;
-    esac
-}
-
-# Automatically install the needed support files for this .bashrc file
-install_bashrc_support() {
-	local dtype
-	dtype=$(distribution)
-
-	case $dtype in
-		"redhat")
-			sudo yum install multitail tree zoxide trash-cli fzf bash-completion fastfetch
-			;;
-		"suse")
-			sudo zypper install multitail tree zoxide trash-cli fzf bash-completion fastfetch
-			;;
-		"debian")
-			sudo apt-get install multitail tree zoxide trash-cli fzf bash-completion
-			# Fetch the latest fastfetch release URL for linux-amd64 deb file
-			FASTFETCH_URL=$(curl -s https://api.github.com/repos/fastfetch-cli/fastfetch/releases/latest | grep "browser_download_url.*linux-amd64.deb" | cut -d '"' -f 4)
-
-			# Download the latest fastfetch deb file
-			curl -sL $FASTFETCH_URL -o /tmp/fastfetch_latest_amd64.deb
-
-			# Install the downloaded deb file using apt-get
-			sudo apt-get install /tmp/fastfetch_latest_amd64.deb
-			;;
-		"arch")
-			sudo paru multitail tree zoxide trash-cli fzf bash-completion fastfetch
-			;;
-		"slackware")
-			echo "No install support for Slackware"
-			;;
-		*)
-			echo "Unknown distribution"
-			;;
-	esac
-}
-
-# IP address lookup
-alias whatismyip="whatsmyip"
-function whatsmyip () {
-    # Internal IP Lookup.
-    if command -v ip &> /dev/null; then
-        echo -n "Internal IP: "
-        ip addr show wlan0 | grep "inet " | awk '{print $2}' | cut -d/ -f1
-    else
-        echo -n "Internal IP: "
-        ifconfig wlan0 | grep "inet " | awk '{print $2}'
-    fi
-
-    # External IP Lookup
-    echo -n "External IP: "
-    curl -s ifconfig.me
-}
-
-# View Apache logs
-apachelog() {
-	if [ -f /etc/httpd/conf/httpd.conf ]; then
-		cd /var/log/httpd && ls -xAh && multitail --no-repeat -c -s 2 /var/log/httpd/*_log
+# Internal + external IP. Interface is discovered from the default route
+# instead of being hardcoded to wlan0 — servers have eth0/ens*/enp*.
+whatsmyip() {
+	local iface
+	iface=$(ip route show default 2>/dev/null | awk '/default/ {print $5; exit}')
+	if [ -n "$iface" ]; then
+		echo -n "Internal IP ($iface): "
+		ip -4 addr show "$iface" | awk '/inet /{print $2}' | cut -d/ -f1
 	else
-		cd /var/log/apache2 && ls -xAh && multitail --no-repeat -c -s 2 /var/log/apache2/*.log
+		echo "Internal IP: no default route"
 	fi
+	echo -n "External IP: "
+	curl -s --max-time 5 ifconfig.me
+	echo
 }
+alias whatismyip='whatsmyip'
 
-# Edit the Apache configuration
-apacheconfig() {
-	if [ -f /etc/httpd/conf/httpd.conf ]; then
-		sedit /etc/httpd/conf/httpd.conf
-	elif [ -f /etc/apache2/apache2.conf ]; then
-		sedit /etc/apache2/apache2.conf
-	else
-		echo "Error: Apache config file could not be found."
-		echo "Searching for possible locations:"
-		sudo updatedb && locate httpd.conf && locate apache2.conf
-	fi
-}
-
-# Edit the PHP configuration file
-phpconfig() {
-	if [ -f /etc/php.ini ]; then
-		sedit /etc/php.ini
-	elif [ -f /etc/php/php.ini ]; then
-		sedit /etc/php/php.ini
-	elif [ -f /etc/php5/php.ini ]; then
-		sedit /etc/php5/php.ini
-	elif [ -f /usr/bin/php5/bin/php.ini ]; then
-		sedit /usr/bin/php5/bin/php.ini
-	elif [ -f /etc/php5/apache2/php.ini ]; then
-		sedit /etc/php5/apache2/php.ini
-	else
-		echo "Error: php.ini file could not be found."
-		echo "Searching for possible locations:"
-		sudo updatedb && locate php.ini
-	fi
-}
-
-# Edit the MySQL configuration file
-mysqlconfig() {
-	if [ -f /etc/my.cnf ]; then
-		sedit /etc/my.cnf
-	elif [ -f /etc/mysql/my.cnf ]; then
-		sedit /etc/mysql/my.cnf
-	elif [ -f /usr/local/etc/my.cnf ]; then
-		sedit /usr/local/etc/my.cnf
-	elif [ -f /usr/bin/mysql/my.cnf ]; then
-		sedit /usr/bin/mysql/my.cnf
-	elif [ -f ~/my.cnf ]; then
-		sedit ~/my.cnf
-	elif [ -f ~/.my.cnf ]; then
-		sedit ~/.my.cnf
-	else
-		echo "Error: my.cnf file could not be found."
-		echo "Searching for possible locations:"
-		sudo updatedb && locate my.cnf
-	fi
-}
-
-
-# Trim leading and trailing spaces (for scripts)
-trim() {
-	local var=$*
-	var="${var#"${var%%[![:space:]]*}"}" # remove leading whitespace characters
-	var="${var%"${var##*[![:space:]]}"}" # remove trailing whitespace characters
-	echo -n "$var"
-}
-
-_z_cd() {
-    cd "$@" || return "$?"
-}
-
-function hb {
-    if [ $# -eq 0 ]; then
-        echo "No file path specified."
-        return
-    elif [ ! -f "$1" ]; then
-        echo "File path does not exist."
-        return
-    fi
-
-    uri="http://bin.christitus.com/documents"
-    response=$(curl -s -X POST -d @"$1" "$uri")
-    if [ $? -eq 0 ]; then
-        hasteKey=$(echo $response | jq -r '.key')
-        echo "http://bin.christitus.com/$hasteKey"
-    else
-        echo "Failed to upload the document."
-    fi
-}
-
-zi() {
-    _zoxide_result="$(zoxide query -i -- "$@")" && _z_cd "$_zoxide_result"
-}
-
-
-alias za='zoxide add'
-
-alias zq='zoxide query'
-alias zqi='zoxide query -i'
-
-alias zr='zoxide remove'
-zri() {
-    _zoxide_result="$(zoxide query -i -- "$@")" && zoxide remove "$_zoxide_result"
-}
-
-
-_zoxide_hook() {
-    if [ -z "${_ZO_PWD}" ]; then
-        _ZO_PWD="${PWD}"
-    elif [ "${_ZO_PWD}" != "${PWD}" ]; then
-        _ZO_PWD="${PWD}"
-        zoxide add "$(pwd -L)"
-    fi
-}
-
-case "$PROMPT_COMMAND" in
-    *_zoxide_hook*) ;;
-    *) PROMPT_COMMAND="_zoxide_hook${PROMPT_COMMAND:+;${PROMPT_COMMAND}}" ;;
-esac
-alias lookingglass="~/looking-glass-B5.0.1/client/build/looking-glass-client -F"
-
-
-alias hug="hugo server -F --bind=10.0.0.97 --baseURL=http://10.0.0.97"
-
-# Check if the shell is interactive
-if [[ $- == *i* ]]; then
-    # Bind Ctrl+f to insert 'zi' followed by a newline
-    bind '"\C-f":"zi\n"'
-fi
-
-export PATH=$PATH:"$HOME/.local/bin:$HOME/.cargo/bin:/var/lib/flatpak/exports/bin:/.local/share/flatpak/exports/bin"
-
-eval "$(starship init bash)"
-eval "$(zoxide init bash)"
-
-export GOPATH=$HOME/go
-export PATH=$PATH:/usr/local/go/bin:$GOPATH/bin
-
-export PATH=$HOME/miniconda3/bin:$PATH
-alias conda-init='source $HOME/miniconda3/bin/activate'
-
-#Autojump
-if [ -f "/usr/share/autojump/autojump.sh" ]; then
-	. /usr/share/autojump/autojump.sh
-elif [ -f "/usr/share/autojump/autojump.bash" ]; then
-	. /usr/share/autojump/autojump.bash
-else
-	echo "can't found the autojump script"
-fi
-
-export PATH="${KREW_ROOT:-$HOME/.krew}/bin:$PATH"
-complete -C /usr/bin/terraform terraform
-
-eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
-
-export PATH="$PATH:/opt/nvim-linux64/bin"
-
-if [ -f "$HOME/.use-nala" ]; then
-        . "$HOME/.use-nala"
-fi
-
-# sst
-export PATH=$HOME/.sst/bin:$PATH
-
-# add Pulumi to the PATH
-export PATH=$PATH:$HOME/.pulumi/bin
-
-source <(kubectl completion bash)
-alias kubectl=kubecolor
-complete -o default -F __start_kubectl kubecolor
-alias k='kubectl'
-complete -F __start_kubectl k
-
-source <(helm completion bash)
-
-
-alias docker-clean=' \
-  docker container prune -f ; \
-  docker image prune -f ; \
-  docker network prune -f ; \
-  docker volume prune -f '
-
-install_nvme_cli() {
-    if ! command -v nvme &> /dev/null; then
-        echo "nvme-cli not found, installing..."
-        if [[ -f /etc/debian_version ]]; then
-            sudo apt-get update && sudo apt-get install -y nvme-cli
-        elif [[ -f /etc/redhat-release ]]; then
-            sudo yum install -y nvme-cli
-        elif [[ -f /etc/arch-release ]]; then
-            sudo pacman -Syu --noconfirm nvme-cli
-        else
-            echo "Unsupported OS. Please install nvme-cli manually."
-            return 1
-        fi
-    fi
-}
-
+# NVMe temperatures (physical hosts)
 check_nvme_temps() {
-    for dev in /dev/nvme[0-9]n[0-9]; do
-        echo "$dev: $(sudo nvme smart-log $dev | grep -i temperature)"
-    done
+	if ! _have nvme; then
+		echo "nvme-cli not installed" >&2
+		return 1
+	fi
+	local dev
+	for dev in /dev/nvme[0-9]n[0-9]; do
+		[ -e "$dev" ] || continue
+		echo "$dev: $(sudo nvme smart-log "$dev" | grep -i temperature)"
+	done
 }
-
-
-run_in_all_dirs() {
-  if [ $# -eq 0 ]; then
-      echo "Usage: run_in_all_dirs <command> [args...]"
-      echo "Example: run_in_all_dirs git status"
-      return 1
-  fi
-
-  for dir in */; do
-      if [ -d "$dir" ]; then
-	  echo "Executing in: $dir"
-	  (cd "$dir" && "$@")
-	  echo "---"
-      fi
-  done
-}
-
 alias nvmetemp='check_nvme_temps'
-alias c='clear'
-alias tf='terraform'
 
-source <(k3d completion bash)
-source <(go-blueprint completion bash)
+# Run a command in every immediate subdirectory
+run_in_all_dirs() {
+	if [ $# -eq 0 ]; then
+		echo "Usage: run_in_all_dirs <command> [args...]"
+		echo "Example: run_in_all_dirs git status"
+		return 1
+	fi
+	local dir
+	for dir in */; do
+		[ -d "$dir" ] || continue
+		echo "Executing in: $dir"
+		(cd "$dir" && "$@")
+		echo "---"
+	done
+}
 
-alias t='terraform'
-complete -C /usr/bin/terraform t
+#######################################################
+# DEVOPS TOOLING — every block guarded
+#######################################################
 
-export NVM_DIR="$HOME/.config/nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
-[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+# Prompt
+_have starship && eval "$(starship init bash)"
 
-export LIBVIRT_DEFAULT_URI='qemu:///system'
-export PATH=/home/ujstor/bin:$PATH
+# zoxide. `zoxide init bash` installs its own PROMPT_COMMAND hook and
+# defines z/zi, so no hand-rolled hook here (it double-counted every dir).
+if _have zoxide; then
+	eval "$(zoxide init bash)"
+
+	# Defined AFTER the init so these win — zoxide's own zi() would
+	# otherwise overwrite them.
+	_z_cd() { cd "$@" || return "$?"; }
+	zi() {
+		local r
+		r="$(zoxide query -i -- "$@")" && _z_cd "$r"
+	}
+	zri() {
+		local r
+		r="$(zoxide query -i -- "$@")" && zoxide remove "$r"
+	}
+	alias za='zoxide add'
+	alias zq='zoxide query'
+	alias zqi='zoxide query -i'
+	alias zr='zoxide remove'
+
+	# Ctrl-f -> interactive jump
+	bind '"\C-f":"zi\n"' 2>/dev/null
+fi
+
+# fzf
+_source_if "$HOME/.fzf.bash"
+
+# kubectl / kubecolor
+if _have kubectl; then
+	source <(kubectl completion bash)
+	alias k='kubectl'
+	complete -o default -F __start_kubectl k
+	if _have kubecolor; then
+		alias kubectl='kubecolor'
+		complete -o default -F __start_kubectl kubecolor
+	fi
+fi
+
+_have helm && source <(helm completion bash)
+_have k3d && source <(k3d completion bash)
+_have go-blueprint && source <(go-blueprint completion bash)
+
+if _have terraform; then
+	alias tf='terraform'
+	alias t='terraform'
+	complete -C "$(command -v terraform)" terraform
+	complete -C "$(command -v terraform)" tf
+	complete -C "$(command -v terraform)" t
+fi
+
+# Homebrew on Linux, if present
+if [ -x /home/linuxbrew/.linuxbrew/bin/brew ]; then
+	eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "$HOME/.linuxbrew/bin/brew" ]; then
+	eval "$("$HOME/.linuxbrew/bin/brew" shellenv)"
+fi
+
+# nvm
+export NVM_DIR="${NVM_DIR:-$HOME/.config/nvm}"
+_source_if "$NVM_DIR/nvm.sh"
+_source_if "$NVM_DIR/bash_completion"
+
+# nala opt-in
+_source_if "$HOME/.use-nala"
+
+#######################################################
+# LOCAL OVERRIDES
+#######################################################
+# Machine-specific settings (host IPs, per-box tool paths, cloud creds)
+# belong here, not in the tracked file.
+_source_if "$HOME/.bashrc.local"

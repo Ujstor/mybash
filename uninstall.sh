@@ -1,156 +1,157 @@
-#!/bin/sh -e
+#!/bin/sh
+# mybash uninstaller. Mirrors setup.sh: removes only what setup.sh installs,
+# restores the .bashrc backup it made, and never needs a display.
+#
+#   ./uninstall.sh              remove configs + starship/fzf/zoxide
+#   ./uninstall.sh --packages   also remove the distro packages
+#   ./uninstall.sh --font       also remove the opt-in Nerd Font
 
-# Define color codes using tput for better compatibility
-RC=$(tput sgr0)
-RED=$(tput setaf 1)
-YELLOW=$(tput setaf 3)
-GREEN=$(tput setaf 2)
+set -eu
+
+RC=''
+RED=''
+YELLOW=''
+GREEN=''
+if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ -n "${TERM:-}" ] && [ "${TERM:-}" != dumb ]; then
+	RC=$(tput sgr0 2>/dev/null || printf '')
+	RED=$(tput setaf 1 2>/dev/null || printf '')
+	YELLOW=$(tput setaf 3 2>/dev/null || printf '')
+	GREEN=$(tput setaf 2 2>/dev/null || printf '')
+fi
 
 LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
 PACKAGER=""
 SUDO_CMD=""
+REMOVE_PACKAGES=0
+REMOVE_FONT=0
 
-print_colored() {
-    color=$1
-    message=$2
-    printf "${color}%s${RC}\n" "$message"
-}
+for arg in "$@"; do
+	case "$arg" in
+	--packages) REMOVE_PACKAGES=1 ;;
+	--font) REMOVE_FONT=1 ;;
+	-h | --help)
+		sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'
+		exit 0
+		;;
+	*)
+		printf 'Unknown option: %s\n' "$arg" >&2
+		exit 1
+		;;
+	esac
+done
 
-command_exists() {
-    command -v "$1" >/dev/null 2>&1
-}
+print_colored() { printf "%s%s%s\n" "$1" "$2" "$RC"; }
+command_exists() { command -v "$1" >/dev/null 2>&1; }
 
 determine_package_manager() {
-    PACKAGEMANAGER='nala apt dnf yum pacman zypper emerge xbps-install nix-env'
-    for pgm in $PACKAGEMANAGER; do
-        if command_exists "$pgm"; then
-            PACKAGER="$pgm"
-            printf "Using %s\n" "$pgm"
-            break
-        fi
-    done
-
-    if [ -z "$PACKAGER" ]; then
-        print_colored "$RED" "Can't find a supported package manager"
-        exit 1
-    fi
+	for pgm in nala apt-get dnf yum pacman zypper emerge xbps-install nix-env; do
+		if command_exists "$pgm"; then
+			PACKAGER="$pgm"
+			break
+		fi
+	done
 }
 
 determine_sudo_command() {
-    if command_exists sudo; then
-        SUDO_CMD="sudo"
-    elif command_exists doas && [ -f "/etc/doas.conf" ]; then
-        SUDO_CMD="doas"
-    else
-        SUDO_CMD="su -c"
-    fi
-
-    printf "Using %s as privilege escalation software\n" "$SUDO_CMD"
+	if [ "$(id -u)" -eq 0 ]; then
+		SUDO_CMD=""
+	elif command_exists sudo; then
+		SUDO_CMD="sudo"
+	elif command_exists doas && [ -f /etc/doas.conf ]; then
+		SUDO_CMD="doas"
+	fi
 }
 
 uninstall_dependencies() {
-    DEPENDENCIES='bash-completion bat tree multitail trash-cli'
+	[ "$REMOVE_PACKAGES" = "1" ] || {
+		print_colored "$YELLOW" "Leaving distro packages installed (--packages to remove)"
+		return 0
+	}
+	[ -n "$PACKAGER" ] || {
+		print_colored "$RED" "No supported package manager found"
+		return 0
+	}
 
-    print_colored "$YELLOW" "Uninstalling dependencies..."
-    if [ "$PACKAGER" = "pacman" ]; then
-        if command_exists yay; then
-            yay -Rns --noconfirm ${DEPENDENCIES}
-        elif command_exists paru; then
-            paru -Rns --noconfirm ${DEPENDENCIES}
-        else
-            ${SUDO_CMD} pacman -Rns --noconfirm ${DEPENDENCIES}
-        fi
-    elif [ "$PACKAGER" = "nala" ] || [ "$PACKAGER" = "apt" ]; then
-        ${SUDO_CMD} ${PACKAGER} purge -y ${DEPENDENCIES}
-    elif [ "$PACKAGER" = "emerge" ]; then
-        ${SUDO_CMD} ${PACKAGER} --deselect app-shells/bash-completion sys-apps/bat app-text/tree app-text/multitail app-misc/fastfetch app-editors/neovim app-misc/trash-cli
-    elif [ "$PACKAGER" = "xbps-install" ]; then
-        ${SUDO_CMD} xbps-remove -Ry ${DEPENDENCIES}
-    elif [ "$PACKAGER" = "nix-env" ]; then
-        ${SUDO_CMD} ${PACKAGER} -e bash-completion bat tree multitail fastfetch neovim trash-cli
-    elif [ "$PACKAGER" = "dnf" ] || [ "$PACKAGER" = "yum" ]; then
-        ${SUDO_CMD} ${PACKAGER} remove -y ${DEPENDENCIES}
-    else
-        ${SUDO_CMD} ${PACKAGER} remove -y ${DEPENDENCIES}
-    fi
+	DEPENDENCIES='bash-completion bat tree multitail trash-cli'
+	print_colored "$YELLOW" "Removing: $DEPENDENCIES"
+	case "$PACKAGER" in
+	nala | apt-get) ${SUDO_CMD} "$PACKAGER" purge -y ${DEPENDENCIES} || true ;;
+	dnf | yum) ${SUDO_CMD} "$PACKAGER" remove -y ${DEPENDENCIES} || true ;;
+	zypper) ${SUDO_CMD} zypper --non-interactive remove ${DEPENDENCIES} || true ;;
+	pacman) ${SUDO_CMD} pacman -Rns --noconfirm ${DEPENDENCIES} || true ;;
+	xbps-install) ${SUDO_CMD} xbps-remove -Ry ${DEPENDENCIES} || true ;;
+	emerge) ${SUDO_CMD} emerge --deselect app-shells/bash-completion sys-apps/bat app-text/tree app-text/multitail app-misc/trash-cli || true ;;
+	nix-env) nix-env -e bash-completion bat tree multitail trash-cli || true ;;
+	esac
 }
 
 uninstall_font() {
-    FONT_NAME="MesloLGS Nerd Font Mono"
-    FONT_DIR="$HOME/.local/share/fonts/$FONT_NAME"
-    
-    if [ -d "$FONT_DIR" ]; then
-        print_colored "$YELLOW" "Removing font: $FONT_NAME"
-        rm -rf "$FONT_DIR"
-        fc-cache -fv
-        print_colored "$GREEN" "Font removed: $FONT_NAME"
-    else
-        print_colored "$YELLOW" "Font not found: $FONT_NAME"
-    fi
+	[ "$REMOVE_FONT" = "1" ] || return 0
+	FONT_DIR="$HOME/.local/share/fonts/MesloLGS Nerd Font Mono"
+	if [ -d "$FONT_DIR" ]; then
+		rm -rf "$FONT_DIR"
+		command_exists fc-cache && fc-cache -f >/dev/null || true
+		print_colored "$GREEN" "Font removed"
+	else
+		print_colored "$YELLOW" "Font not installed"
+	fi
 }
 
-uninstall_starship_and_fzf() {
-    if command_exists starship; then
-        print_colored "$YELLOW" "Uninstalling Starship..."
-        ${SUDO_CMD} rm -f "$(command -v starship)"
-        print_colored "$GREEN" "Starship uninstalled"
-    fi
+uninstall_starship_fzf_zoxide() {
+	for bin in starship zoxide; do
+		path=$(command -v "$bin" 2>/dev/null || printf '')
+		if [ -n "$path" ]; then
+			if [ -w "$path" ]; then
+				rm -f "$path"
+			else
+				${SUDO_CMD} rm -f "$path"
+			fi
+			print_colored "$GREEN" "$bin removed"
+		fi
+	done
 
-    if [ -d "$HOME/.fzf" ]; then
-        print_colored "$YELLOW" "Uninstalling fzf..."
-        "$HOME/.fzf/uninstall"
-        rm -rf "$HOME/.fzf"
-        print_colored "$GREEN" "fzf uninstalled"
-    fi
-}
-
-uninstall_zoxide() {
-    if command_exists zoxide; then
-        print_colored "$YELLOW" "Uninstalling Zoxide..."
-        ${SUDO_CMD} rm -f "$(command -v zoxide)"
-        print_colored "$GREEN" "Zoxide uninstalled"
-    fi
+	if [ -d "$HOME/.fzf" ]; then
+		if [ -x "$HOME/.fzf/uninstall" ]; then
+			"$HOME/.fzf/uninstall" >/dev/null 2>&1 || true
+		fi
+		rm -rf "$HOME/.fzf" "$HOME/.fzf.bash"
+		print_colored "$GREEN" "fzf removed"
+	fi
 }
 
 remove_configs() {
-    USER_HOME=$(getent passwd "${SUDO_USER:-$USER}" | cut -d: -f6)
+	print_colored "$YELLOW" "Removing configuration files"
 
-    print_colored "$YELLOW" "Removing configuration files..."
+	if [ -L "$HOME/.bashrc" ]; then
+		rm -f "$HOME/.bashrc"
+		if [ -f "$HOME/.bashrc.bak" ]; then
+			mv "$HOME/.bashrc.bak" "$HOME/.bashrc"
+			print_colored "$GREEN" "Restored original .bashrc"
+		elif [ -f /etc/skel/.bashrc ]; then
+			cp /etc/skel/.bashrc "$HOME/.bashrc"
+			print_colored "$GREEN" "Restored .bashrc from /etc/skel"
+		fi
+	fi
 
-    # Remove .bashrc symlink and restore backup if it exists
-    if [ -L "$USER_HOME/.bashrc" ]; then
-        rm "$USER_HOME/.bashrc"
-        if [ -f "$USER_HOME/.bashrc.bak" ]; then
-            mv "$USER_HOME/.bashrc.bak" "$USER_HOME/.bashrc"
-            print_colored "$GREEN" "Restored original .bashrc"
-        fi
-    fi
+	rm -f "$HOME/.config/starship.toml" "$HOME/.config/fastfetch/config.jsonc"
 
-    # Remove starship config
-    rm -f "$USER_HOME/.config/starship.toml"
-
-    # Remove fastfetch config
-    rm -f "$USER_HOME/.config/fastfetch/config.jsonc"
-
-    print_colored "$GREEN" "Configuration files removed"
+	print_colored "$GREEN" "Configuration files removed"
 }
 
 remove_linuxtoolbox() {
-    if [ -d "$LINUXTOOLBOXDIR" ]; then
-        print_colored "$YELLOW" "Removing linuxtoolbox directory..."
-        rm -rf "$LINUXTOOLBOXDIR"
-        print_colored "$GREEN" "linuxtoolbox directory removed"
-    fi
+	if [ -d "$LINUXTOOLBOXDIR/mybash" ]; then
+		rm -rf "$LINUXTOOLBOXDIR/mybash"
+		rmdir "$LINUXTOOLBOXDIR" 2>/dev/null || true
+		print_colored "$GREEN" "linuxtoolbox checkout removed"
+	fi
 }
 
-# Main execution
 determine_package_manager
 determine_sudo_command
 uninstall_dependencies
 uninstall_font
-uninstall_starship_and_fzf
-uninstall_zoxide
+uninstall_starship_fzf_zoxide
 remove_configs
 remove_linuxtoolbox
 
-print_colored "$GREEN" "Uninstallation complete. Please restart your shell for changes to take effect."
+print_colored "$GREEN" "Uninstall complete. Restart your shell."
