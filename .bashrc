@@ -460,3 +460,26 @@ _source_if "$HOME/.use-nala"
 # Machine-specific settings (host IPs, per-box tool paths, cloud creds)
 # belong here, not in the tracked file.
 _source_if "$HOME/.bashrc.local"
+
+#######################################################
+# linux-devops-tools
+#######################################################
+# Ujstor/linux-devops-tools keeps its shell integration in ONE marker-fenced
+# block, and it writes that block into whatever ~/.bashrc turns out to be. When
+# this repo owns ~/.bashrc — which it does, by symlink, on every box that repo
+# bootstraps — "whatever ~/.bashrc turns out to be" is THIS FILE, inside a git
+# worktree. So it was rewritten on every run: the checkout went permanently
+# dirty, and a dirty checkout is one the bootstrapper then refuses to update,
+# which quietly froze mybash at whatever commit first landed.
+#
+# Carrying the block here instead ends that. It is byte-identical to the one
+# that repo writes, so its writer finds it already in place and changes nothing.
+#
+# It costs a box that does NOT have linux-devops-tools exactly nothing: the
+# guard is a file test, and with no ~/.bashrc.d/00-init.bash the line is a
+# no-op. Keep the two comment lines and the markers exactly as they are —
+# byte-identical is the whole point.
+# >>> linux-devops-tools >>>
+# Managed block — edit ~/.bashrc.d/ instead. Remove with: devenv shell uninstall
+[ -f "$HOME/.bashrc.d/00-init.bash" ] && . "$HOME/.bashrc.d/00-init.bash"
+# <<< linux-devops-tools <<<
