@@ -84,11 +84,14 @@ esac
 
 _source_if /etc/bashrc
 
-# Programmable completion
-if [ -r /usr/share/bash-completion/bash_completion ]; then
-	. /usr/share/bash-completion/bash_completion
-else
-	_source_if /etc/bash_completion
+# Programmable completion — once. A login shell (ssh, a tmux pane) has already
+# loaded it from /etc/profile.d, and a second load costs ~30 ms for nothing.
+if [ -z "${BASH_COMPLETION_VERSINFO-}" ]; then
+	if [ -r /usr/share/bash-completion/bash_completion ]; then
+		. /usr/share/bash-completion/bash_completion
+	else
+		_source_if /etc/bash_completion
+	fi
 fi
 
 #######################################################
@@ -102,7 +105,17 @@ export HISTCONTROL=erasedups:ignoredups:ignorespace
 
 shopt -s checkwinsize
 shopt -s histappend
-PROMPT_COMMAND='history -a'
+# ADD `history -a`, never assign: an assignment drops whatever is already there
+# (an audit hook in /etc/bash.bashrc, a terminal's cwd reporting), and where a
+# hardened box has made PROMPT_COMMAND readonly it errors at every shell start.
+# The ( ) assignment is only a probe for readonly and is meant to be thrown away.
+# shellcheck disable=SC2030,SC2031
+if (PROMPT_COMMAND=${PROMPT_COMMAND-}) 2>/dev/null; then
+	case ";${PROMPT_COMMAND-};" in
+	*";history -a;"*) ;;
+	*) PROMPT_COMMAND="history -a${PROMPT_COMMAND:+;$PROMPT_COMMAND}" ;;
+	esac
+fi
 
 # Free ctrl-S for forward history search
 stty -ixon 2>/dev/null
@@ -129,8 +142,12 @@ else
 	export VISUAL=vi
 fi
 
-# Open a file as root with the editor you actually configured.
-sedit() { sudo -E "${EDITOR:-vi}" "$@"; }
+# Edit a root-owned file with the editor you configured. sudoedit runs that
+# editor as YOU on a temporary copy and writes it back as root. `sudo -E $EDITOR`
+# ran it as root with your HOME and XDG_* dirs, so nvim left root-owned state
+# (~/.local/state/nvim, swap files) that your own nvim then could not open — and
+# root executed your writable ~/.config/nvim and plugins.
+sedit() { sudoedit "$@"; }
 
 #######################################################
 # COLOURS
@@ -153,12 +170,22 @@ export LESS_TERMCAP_ue=$'\E[0m'
 export LESS_TERMCAP_us=$'\E[01;32m'
 
 # bat is "bat" everywhere except Debian/Ubuntu, where it is "batcat".
-# Detect the binary, do not guess from the distro.
-if _have batcat; then
-	alias cat='batcat'
-	alias bat='batcat'
-elif _have bat; then
-	alias cat='bat'
+# Detect the binary, do not guess from the distro. `cat FILE…` shows it through
+# bat; any option goes to the real cat, because bat rejects -v, -e, -E, -T, -b
+# and -s — exactly the flags people reach for.
+if _have batcat || _have bat; then
+	_have batcat && alias bat='batcat'
+	cat() {
+		local a
+		for a in "$@"; do
+			case $a in -?*)
+				command cat "$@"
+				return
+				;;
+			esac
+		done
+		if _have batcat; then batcat "$@"; else command bat "$@"; fi
+	}
 fi
 
 #######################################################
@@ -169,9 +196,14 @@ fi
 # *parsed*, so `alias ls=eza` would bake eza into cd() and break every cd
 # on a box without eza.
 if _have eza; then
-	_ls_long_all() { eza -la --color=always --icons "$@"; }
-	alias ls='eza -aF --color=always --icons'
-	alias ll='eza -la --color=always --icons'
+	# `--icons=auto`, never a bare `--icons`: current eza (0.23.5, the version
+	# linux-devops-tools installs) takes an optional WHEN there and swallows the
+	# next word, so `ls /etc` failed with "invalid value '/etc' for '--icons'".
+	# `--color=auto` keeps pipes and $(ls) free of escape codes (eza's -F already
+	# is auto).
+	_ls_long_all() { eza -la --color=auto --icons=auto "$@"; }
+	alias ls='eza -aF --color=auto --icons=auto'
+	alias ll='eza -la --color=auto --icons=auto'
 	alias la='eza -Alh --color=always'
 	alias lx='eza -la --sort=extension --color=always'
 	alias lk='eza -la --sort=size --color=always'
@@ -224,7 +256,9 @@ alias c='clear'
 alias cp='cp -i'
 alias mv='mv -i'
 alias mkdir='mkdir -p'
-alias ps='ps auxf'
+# `ps` alone shows the full tree; with any argument it is plain ps, so `ps -ef`
+# and `ps -o pid,comm` work (as an alias both failed: "conflicting format options").
+ps() { if [ $# -eq 0 ]; then command ps auxf; else command ps "$@"; fi; }
 alias ping='ping -c 10'
 alias less='less -R'
 
@@ -280,11 +314,12 @@ alias rebootsafe='sudo shutdown -r now'
 
 alias ssh='ssh -o ServerAliveInterval=120 -o ServerAliveCountMax=9999'
 
+# No `docker volume prune`: before Docker 23 it deletes every unused NAMED
+# volume too — a stopped database's data, one keypress after its container.
 alias docker-clean=' \
   docker container prune -f ; \
   docker image prune -f ; \
-  docker network prune -f ; \
-  docker volume prune -f '
+  docker network prune -f '
 
 #######################################################
 # FUNCTIONS
@@ -341,12 +376,20 @@ up() {
 }
 
 # ls after every cd. Uses _ls_long_all, so it works with or without eza.
+# Only at the top level of an interactive shell writing to a terminal: in a
+# subshell or a pipe the listing landed in captured output — `dir=$(cd x && pwd)`
+# got the whole listing, and a sourced script's SCRIPT_DIR broke — and a failing
+# listing must never turn a successful cd into a failed one.
 cd() {
-	if [ -n "$1" ]; then
-		builtin cd "$@" && _ls_long_all
+	if [ -n "${1-}" ]; then
+		builtin cd "$@" || return
 	else
-		builtin cd ~ && _ls_long_all
+		builtin cd ~ || return
 	fi
+	if [ "${BASH_SUBSHELL:-0}" -eq 0 ] && [ -t 1 ]; then
+		_ls_long_all || :
+	fi
+	return 0
 }
 
 # Internal + external IP. Interface is discovered from the default route
@@ -391,7 +434,7 @@ run_in_all_dirs() {
 	for dir in */; do
 		[ -d "$dir" ] || continue
 		echo "Executing in: $dir"
-		(cd "$dir" && "$@")
+		(builtin cd "$dir" && "$@")
 		echo "---"
 	done
 }
@@ -424,12 +467,26 @@ if _have zoxide; then
 	alias zqi='zoxide query -i'
 	alias zr='zoxide remove'
 
-	# Ctrl-f -> interactive jump
-	bind '"\C-f":"zi\n"' 2>/dev/null
+	# Ctrl-f -> interactive jump. \C-a\C-k first: typed straight after text,
+	# "zi" was appended to the line and the line ran (`echo hello` became
+	# `echo hellozi`). The cleared text is in the kill ring — Ctrl-y brings it back.
+	bind '"\C-f":"\C-a\C-kzi\C-j"' 2>/dev/null
 fi
 
-# fzf
-_source_if "$HOME/.fzf.bash"
+# fzf key bindings: its own installer's ~/.fzf.bash, else a packaged fzf's —
+# `fzf --bash` from 0.48 on, Debian/Ubuntu's example file before that. setup.sh
+# only runs fzf's installer when no fzf is installed, so with the distro package
+# (every Debian/Ubuntu box) ~/.fzf.bash never existed and Ctrl-R/Ctrl-T did nothing.
+if [ -r "$HOME/.fzf.bash" ]; then
+	. "$HOME/.fzf.bash"
+elif _have fzf; then
+	if _fzf_init=$(fzf --bash 2>/dev/null); then
+		eval "$_fzf_init"
+	else
+		_source_if /usr/share/doc/fzf/examples/key-bindings.bash
+	fi
+	unset _fzf_init
+fi
 
 # kubectl / kubecolor
 if _have kubectl; then
@@ -470,13 +527,6 @@ _source_if "$NVM_DIR/bash_completion"
 _source_if "$HOME/.use-nala"
 
 #######################################################
-# LOCAL OVERRIDES
-#######################################################
-# Machine-specific settings (host IPs, per-box tool paths, cloud creds)
-# belong here, not in the tracked file.
-_source_if "$HOME/.bashrc.local"
-
-#######################################################
 # linux-devops-tools
 #######################################################
 # Ujstor/linux-devops-tools keeps its shell integration in ONE marker-fenced
@@ -494,7 +544,23 @@ _source_if "$HOME/.bashrc.local"
 # guard is a file test, and with no ~/.bashrc.d/00-init.bash the line is a
 # no-op. Keep the two comment lines and the markers exactly as they are —
 # byte-identical is the whole point.
+#
+# It sits ABOVE the local overrides so that ~/.bashrc.local really is sourced
+# last, after that repo's fragments too. Its writer rewrites the block wherever
+# it finds it, so the position is stable.
 # >>> linux-devops-tools >>>
 # Managed block — edit ~/.bashrc.d/ instead. Remove with: devenv shell uninstall
 [ -f "$HOME/.bashrc.d/00-init.bash" ] && . "$HOME/.bashrc.d/00-init.bash"
 # <<< linux-devops-tools <<<
+
+#######################################################
+# LOCAL OVERRIDES
+#######################################################
+# Machine-specific settings (host IPs, per-box tool paths, cloud creds)
+# belong here, not in the tracked file. Sourced last, so they win.
+_source_if "$HOME/.bashrc.local"
+
+# End on success. The last command's status is what the first prompt reports,
+# and `_source_if` returns 1 when there is no ~/.bashrc.local — which is nearly
+# every box — so every new shell opened with a red, failed prompt.
+true
