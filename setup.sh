@@ -11,9 +11,19 @@
 # Usage:
 #   ./setup.sh                 install / update
 #   ./setup.sh --with-font     also install the MesloLGS Nerd Font (desktop only)
-#   MYBASH_INSTALL_FONT=1 ./setup.sh    same, via environment
+#   ./setup.sh --config-only   link the configs and install nothing — for a box
+#                              whose tools something else manages (this is how
+#                              linux-devops-tools runs it)
+#   MYBASH_INSTALL_FONT=1 ./setup.sh    same as --with-font, via environment
 
 set -eu
+
+# What an earlier run installed lives in ~/.local/bin, which is not on every PATH
+# this runs with (root under sudo -H, a non-login shell). Without it here
+# command_exists missed starship and zoxide, and both were downloaded and
+# reinstalled on every run.
+PATH="$HOME/.local/bin:$PATH"
+export PATH
 
 RC=''
 RED=''
@@ -32,12 +42,19 @@ REPO_PATH=""
 PACKAGER=""
 SUDO_CMD=""
 INSTALL_FONT="${MYBASH_INSTALL_FONT:-0}"
+CONFIG_ONLY=0
+CAN_INSTALL=1
+# Every backup this script makes is recorded here, outside the checkout (an
+# untracked file inside it would make the checkout look dirty to whatever keeps
+# it up to date), so uninstall.sh can put back exactly what was replaced.
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mybash"
 
 for arg in "$@"; do
 	case "$arg" in
 	--with-font) INSTALL_FONT=1 ;;
+	--config-only) CONFIG_ONLY=1 ;;
 	-h | --help)
-		sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+		sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'
 		exit 0
 		;;
 	*)
@@ -65,8 +82,10 @@ detect_privilege_escalation() {
 	elif command_exists doas && [ -f /etc/doas.conf ]; then
 		SUDO_CMD="doas"
 	else
-		print_colored "$RED" "Need root, sudo or doas to install packages."
-		exit 1
+		# Packages need root; linking the configs and the ~/.local/bin tools do not.
+		print_colored "$YELLOW" "No root, sudo or doas: skipping the distro packages; everything else still installs."
+		CAN_INSTALL=0
+		return 0
 	fi
 	printf "Using %s for privilege escalation\n" "$SUDO_CMD"
 }
@@ -100,10 +119,17 @@ check_environment() {
 #######################################################
 
 setup_repo() {
-	script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || printf '')
-
-	# Run from inside a checkout (git clone + ./setup.sh): use it as-is.
-	if [ -n "$script_dir" ] && [ -f "$script_dir/.bashrc" ] && [ -d "$script_dir/.git" ]; then
+	# Run from inside a checkout (git clone + ./setup.sh): use it as-is — but only
+	# when $0 really is this script. Under `curl | sh` $0 is "sh" and its dirname
+	# is ".", so ANY current directory holding a .bashrc and a .git (a dotfiles
+	# repo, a $HOME kept in git) was taken for the checkout and linked into place.
+	script_dir=''
+	case "$0" in
+	setup.sh | */setup.sh)
+		[ -f "$0" ] && script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || printf '')
+		;;
+	esac
+	if [ -n "$script_dir" ] && [ -f "$script_dir/setup.sh" ] && [ -f "$script_dir/.bashrc" ] && [ -d "$script_dir/.git" ]; then
 		REPO_PATH="$script_dir"
 		print_colored "$GREEN" "Using existing checkout: $REPO_PATH"
 		return 0
@@ -139,7 +165,9 @@ pkg_install() {
 		# which drags in libx11-6, libxcb1, x11-common, libice6, libsm6, libxmu6
 		# and libxt6t64 — 8 X11 packages onto a server with no display, and it
 		# contradicts this script's own promise not to install x11/xorg.
-		DEBIAN_FRONTEND=noninteractive ${SUDO_CMD} "$PACKAGER" install -y --no-install-recommends "$@" || return 1
+		# `env`, not a prefix assignment: sudo drops DEBIAN_FRONTEND from the
+		# environment, and debconf then tried to open a dialog.
+		${SUDO_CMD} env DEBIAN_FRONTEND=noninteractive "$PACKAGER" install -y --no-install-recommends "$@" || return 1
 		;;
 	dnf | yum)
 		${SUDO_CMD} "$PACKAGER" install -y "$@" || return 1
@@ -159,6 +187,13 @@ pkg_install() {
 	nix-env)
 		nix-env -iA "$@" || return 1
 		;;
+	esac
+}
+
+# pkg_refresh — the package lists, before the one-at-a-time retry.
+pkg_refresh() {
+	case "$PACKAGER" in
+	nala | apt-get) ${SUDO_CMD} env DEBIAN_FRONTEND=noninteractive "$PACKAGER" update >/dev/null 2>&1 || true ;;
 	esac
 }
 
@@ -187,9 +222,17 @@ install_dependencies() {
 	esac
 
 	print_colored "$YELLOW" "Installing: $DEPENDENCIES"
+	# apt refuses the whole batch over one name it cannot find — and on a box that
+	# never ran `apt-get update`, it finds none. So on failure: refresh the lists
+	# once, then one package at a time, so a gap costs only itself.
 	# shellcheck disable=SC2086
-	pkg_install $DEPENDENCIES ||
+	if ! pkg_install $DEPENDENCIES; then
 		print_colored "$YELLOW" "Some packages failed; retrying individually"
+		pkg_refresh
+		for dep in $DEPENDENCIES; do
+			pkg_install "$dep" >/dev/null 2>&1 || print_colored "$YELLOW" "  not installed: $dep"
+		done
+	fi
 
 	# eza is not in the repos of older Debian/Ubuntu. Try it on its own so a
 	# failure does not take the rest down; .bashrc falls back to plain ls.
@@ -224,13 +267,13 @@ install_fastfetch() {
 		;;
 	esac
 
-	# Debian/Ubuntu: not in the repos before 24.10, take the release .deb.
+	# Debian/Ubuntu: not in the repos before 24.10, take the release .deb. Its
+	# assets are named after `uname -m` except for amd64 (checked against 2.68.1:
+	# fastfetch-linux-{amd64,aarch64,armv7l,i686}.deb) — the dpkg names 404ed.
 	arch=$(uname -m)
 	case "$arch" in
 	x86_64) deb_arch="amd64" ;;
-	aarch64) deb_arch="arm64" ;;
-	armv7l) deb_arch="armhf" ;;
-	i686) deb_arch="i386" ;;
+	aarch64 | armv7l | i686) deb_arch="$arch" ;;
 	*)
 		print_colored "$YELLOW" "No fastfetch build for $arch, skipping"
 		return 0
@@ -256,10 +299,23 @@ install_starship() {
 	print_colored "$YELLOW" "Installing starship"
 	# -y: never prompt. Installs into ~/.local/bin so no root is needed.
 	mkdir -p "$HOME/.local/bin"
-	if ! curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin"; then
+	run_installer https://starship.rs/install.sh -y -b "$HOME/.local/bin" || {
 		print_colored "$RED" "starship install failed"
 		return 1
-	fi
+	}
+}
+
+# run_installer URL [ARGS…] — download a vendor install script, THEN run it.
+# `curl … | sh` reports sh's status: a failed download ran an empty script and
+# the install was reported as done. `sh FILE` also works where /tmp is noexec.
+run_installer() {
+	url="$1"
+	shift
+	installer=$(mktemp)
+	rc=0
+	curl -fsSL "$url" -o "$installer" && sh "$installer" "$@" || rc=$?
+	rm -f "$installer"
+	return "$rc"
 }
 
 install_fzf() {
@@ -280,10 +336,10 @@ install_zoxide() {
 		return 0
 	fi
 	print_colored "$YELLOW" "Installing zoxide"
-	if ! curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh; then
+	run_installer https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh || {
 		print_colored "$RED" "zoxide install failed"
 		return 1
-	fi
+	}
 }
 
 #######################################################
@@ -332,7 +388,9 @@ install_font() {
 # Config links
 #######################################################
 
-# Back up a real file once, then symlink. Re-running is a no-op.
+# Back up whatever is in the way — a real file, or a symlink this script did not
+# make (stow, another dotfiles repo) — then symlink. Every backup is recorded in
+# $STATE_DIR/backups for uninstall.sh. Re-running is a no-op.
 link_file() {
 	src="$1"
 	dst="$2"
@@ -341,14 +399,21 @@ link_file() {
 		printf "Already linked: %s\n" "$dst"
 		return 0
 	fi
+	# A file linked onto itself becomes a symlink loop where the file was.
+	if [ -e "$dst" ] && [ "$(readlink -f "$dst")" = "$(readlink -f "$src")" ]; then
+		print_colored "$RED" "Refusing to link $dst onto itself"
+		return 1
+	fi
 
-	if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+	if [ -e "$dst" ] || [ -L "$dst" ]; then
 		bak="$dst.bak"
-		if [ -e "$bak" ]; then
+		if [ -e "$bak" ] || [ -L "$bak" ]; then
 			bak="$dst.bak.$(date +%Y%m%d%H%M%S)"
 		fi
 		print_colored "$YELLOW" "Backing up $dst -> $bak"
 		mv "$dst" "$bak"
+		mkdir -p "$STATE_DIR"
+		printf '%s\t%s\n' "$dst" "$bak" >>"$STATE_DIR/backups"
 	fi
 
 	mkdir -p "$(dirname "$dst")"
@@ -362,28 +427,69 @@ link_config() {
 		exit 1
 	fi
 
+	# Which checkout the links point into, for uninstall.sh — written only when it
+	# changes, so a re-run leaves $HOME exactly as it was.
+	if [ "$(cat "$STATE_DIR/checkout" 2>/dev/null || printf '')" != "$REPO_PATH" ]; then
+		mkdir -p "$STATE_DIR"
+		printf '%s\n' "$REPO_PATH" >"$STATE_DIR/checkout"
+	fi
 	link_file "$REPO_PATH/.bashrc" "$HOME/.bashrc"
 	link_file "$REPO_PATH/starship.toml" "$HOME/.config/starship.toml"
 	link_file "$REPO_PATH/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
+	link_login_profile
+}
 
-	if [ ! -f "$HOME/.bash_profile" ]; then
-		printf '[ -f ~/.bashrc ] && . ~/.bashrc\n' >"$HOME/.bash_profile"
-		print_colored "$GREEN" "Created .bash_profile"
-	elif ! grep -q '\.bashrc' "$HOME/.bash_profile"; then
-		print_colored "$YELLOW" ".bash_profile exists but does not source .bashrc"
+# A login bash (ssh, a tmux pane) reads only the FIRST of ~/.bash_profile,
+# ~/.bash_login and ~/.profile. A ~/.bash_profile written here therefore switched
+# ~/.profile off — and on Debian/Ubuntu ~/.profile is what already sources
+# ~/.bashrc and puts ~/.local/bin on PATH. So one is written only when nothing
+# would load ~/.bashrc otherwise.
+MYBASH_PROFILE_LINE='[ -f ~/.bashrc ] && . ~/.bashrc'
+link_login_profile() {
+	bp="$HOME/.bash_profile"
+	if [ -f "$HOME/.profile" ] && grep -q '\.bashrc' "$HOME/.profile"; then
+		# The exact one-liner an earlier setup.sh wrote only hides ~/.profile.
+		if [ -f "$bp" ] && [ "$(cat "$bp")" = "$MYBASH_PROFILE_LINE" ]; then
+			rm -f "$bp"
+			print_colored "$GREEN" "Removed the .bash_profile an earlier setup.sh wrote; it hid ~/.profile"
+		fi
+		return 0
 	fi
+	if [ -e "$bp" ]; then
+		grep -q '\.bashrc' "$bp" ||
+			print_colored "$YELLOW" ".bash_profile exists but does not source .bashrc"
+		return 0
+	fi
+	if [ -f "$HOME/.profile" ]; then
+		printf '[ -f ~/.profile ] && . ~/.profile\n%s\n' "$MYBASH_PROFILE_LINE" >"$bp"
+	else
+		printf '%s\n' "$MYBASH_PROFILE_LINE" >"$bp"
+	fi
+	print_colored "$GREEN" "Created .bash_profile"
 }
 
 #######################################################
 
+if [ "$CONFIG_ONLY" = 1 ]; then
+	# Nothing is installed, so neither a package manager nor root is needed.
+	setup_repo
+	link_config
+	print_colored "$GREEN" "Done (configs only). Restart your shell (or: exec bash) to pick up the changes."
+	exit 0
+fi
+
 check_environment
 setup_repo
-install_dependencies
+if [ "$CAN_INSTALL" = 1 ]; then
+	install_dependencies
+fi
 # A network failure on one of these must not leave the configs unlinked.
 install_starship || print_colored "$YELLOW" "continuing without starship"
 install_fzf || print_colored "$YELLOW" "continuing without fzf"
 install_zoxide || print_colored "$YELLOW" "continuing without zoxide"
-install_font || print_colored "$YELLOW" "continuing without font"
+if [ "$CAN_INSTALL" = 1 ]; then
+	install_font || print_colored "$YELLOW" "continuing without font"
+fi
 link_config
 
 print_colored "$GREEN" "Done. Restart your shell (or: exec bash) to pick up the changes."
