@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1090,SC1091,SC2119,SC2120,SC2154
+#
+# Five directives, none of them papering over a defect — every one is shellcheck
+# reading a dotfile as if it were a program:
+#
+#   SC1090/SC1091  _source_if() sources a path held in a variable, and the files
+#                  it reaches (nvm, fzf, bash_completion, ~/.bashrc.local) are
+#                  optional and machine-specific. Following them is exactly what
+#                  it must not do.
+#   SC2119/SC2120  _ls_long_all takes optional arguments; the cd wrappers call it
+#                  with none on purpose.
+#   SC2154        `t` in the countfiles alias is the loop variable of the `for`
+#                  INSIDE the alias string, which shellcheck cannot see through.
+#
+# Keep this list tight: a new finding should be judged, not absorbed here.
 #######################################################
 # mybash — bash config for headless DevOps / k8s boxes
 #
@@ -59,8 +74,8 @@ export LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
 # finds go/krew/local binaries.
 #######################################################
 case $- in
-	*i*) ;;
-	*) return ;;
+*i*) ;;
+*) return ;;
 esac
 
 #######################################################

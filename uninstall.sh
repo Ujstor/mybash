@@ -74,6 +74,12 @@ uninstall_dependencies() {
 
 	DEPENDENCIES='bash-completion bat tree multitail trash-cli'
 	print_colored "$YELLOW" "Removing: $DEPENDENCIES"
+	# DEPENDENCIES is a package LIST and every branch below wants it split into
+	# separate arguments, so the unquoted expansion is the point rather than an
+	# oversight. The directive sits in front of the whole case because shellcheck
+	# only accepts one before a complete command, not before a case branch
+	# (SC1124).
+	# shellcheck disable=SC2086
 	case "$PACKAGER" in
 	nala | apt-get) ${SUDO_CMD} "$PACKAGER" purge -y ${DEPENDENCIES} || true ;;
 	dnf | yum) ${SUDO_CMD} "$PACKAGER" remove -y ${DEPENDENCIES} || true ;;

@@ -116,7 +116,7 @@ setup_repo() {
 	if [ -d "$REPO_PATH/.git" ]; then
 		print_colored "$YELLOW" "Updating existing checkout: $REPO_PATH"
 		git -C "$REPO_PATH" fetch --quiet origin
-		git -C "$REPO_PATH" pull --quiet --ff-only || \
+		git -C "$REPO_PATH" pull --quiet --ff-only ||
 			print_colored "$YELLOW" "Could not fast-forward, keeping local state"
 	else
 		print_colored "$YELLOW" "Cloning into: $REPO_PATH"
@@ -188,7 +188,7 @@ install_dependencies() {
 
 	print_colored "$YELLOW" "Installing: $DEPENDENCIES"
 	# shellcheck disable=SC2086
-	pkg_install $DEPENDENCIES || \
+	pkg_install $DEPENDENCIES ||
 		print_colored "$YELLOW" "Some packages failed; retrying individually"
 
 	# eza is not in the repos of older Debian/Ubuntu. Try it on its own so a
@@ -197,7 +197,7 @@ install_dependencies() {
 	emerge | nix-env) ;;
 	*)
 		if ! command_exists eza; then
-			pkg_install eza >/dev/null 2>&1 || \
+			pkg_install eza >/dev/null 2>&1 ||
 				print_colored "$YELLOW" "eza not available from $PACKAGER — .bashrc will use plain ls"
 		fi
 		;;
@@ -367,7 +367,7 @@ link_config() {
 	link_file "$REPO_PATH/config.jsonc" "$HOME/.config/fastfetch/config.jsonc"
 
 	if [ ! -f "$HOME/.bash_profile" ]; then
-		printf '[ -f ~/.bashrc ] && . ~/.bashrc\n' > "$HOME/.bash_profile"
+		printf '[ -f ~/.bashrc ] && . ~/.bashrc\n' >"$HOME/.bash_profile"
 		print_colored "$GREEN" "Created .bash_profile"
 	elif ! grep -q '\.bashrc' "$HOME/.bash_profile"; then
 		print_colored "$YELLOW" ".bash_profile exists but does not source .bashrc"
