@@ -57,3 +57,7 @@ be installed the shell falls back to plain `ls` — every `l*` alias still works
 ./uninstall.sh --packages   # also remove the distro packages
 ./uninstall.sh --font       # also remove the opt-in Nerd Font
 ```
+
+It removes only links that point into the mybash checkout, puts back the backup
+`setup.sh` made of each, and deletes only the `starship` and `zoxide` it put in
+`~/.local/bin` — never a copy some package or other installer owns.
