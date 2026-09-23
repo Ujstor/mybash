@@ -20,6 +20,21 @@ if [ -t 1 ] && command -v tput >/dev/null 2>&1 && [ -n "${TERM:-}" ] && [ "${TER
 fi
 
 LINUXTOOLBOXDIR="$HOME/linuxtoolbox"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/mybash"
+# Written by setup.sh: one "<replaced path><TAB><its backup>" line per backup.
+STATE_FILE="$STATE_DIR/backups"
+# The checkout the links point into: the one setup.sh recorded, else this
+# script's own directory when it is a checkout, else where `curl | sh` clones.
+REPO_PATH=$(cat "$STATE_DIR/checkout" 2>/dev/null || printf '')
+if [ -z "$REPO_PATH" ]; then
+	case "$0" in
+	uninstall.sh | */uninstall.sh)
+		here=$(CDPATH='' cd -- "$(dirname -- "$0")" 2>/dev/null && pwd || printf '')
+		[ -n "$here" ] && [ -f "$here/setup.sh" ] && [ -f "$here/.bashrc" ] && REPO_PATH="$here"
+		;;
+	esac
+fi
+REPO_PATH="${REPO_PATH:-$LINUXTOOLBOXDIR/mybash}"
 PACKAGER=""
 SUDO_CMD=""
 REMOVE_PACKAGES=0
@@ -74,6 +89,12 @@ uninstall_dependencies() {
 
 	DEPENDENCIES='bash-completion bat tree multitail trash-cli'
 	print_colored "$YELLOW" "Removing: $DEPENDENCIES"
+	# DEPENDENCIES is a package LIST and every branch below wants it split into
+	# separate arguments, so the unquoted expansion is the point rather than an
+	# oversight. The directive sits in front of the whole case because shellcheck
+	# only accepts one before a complete command, not before a case branch
+	# (SC1124).
+	# shellcheck disable=SC2086
 	case "$PACKAGER" in
 	nala | apt-get) ${SUDO_CMD} "$PACKAGER" purge -y ${DEPENDENCIES} || true ;;
 	dnf | yum) ${SUDO_CMD} "$PACKAGER" remove -y ${DEPENDENCIES} || true ;;
@@ -98,14 +119,13 @@ uninstall_font() {
 }
 
 uninstall_starship_fzf_zoxide() {
+	# Only the copies setup.sh installs, in ~/.local/bin. `command -v` found
+	# whichever came first on PATH — /usr/bin/zoxide from apt (leaving dpkg with a
+	# package whose binary is gone), or another installer's /usr/local/bin copy.
 	for bin in starship zoxide; do
-		path=$(command -v "$bin" 2>/dev/null || printf '')
-		if [ -n "$path" ]; then
-			if [ -w "$path" ]; then
-				rm -f "$path"
-			else
-				${SUDO_CMD} rm -f "$path"
-			fi
+		path="$HOME/.local/bin/$bin"
+		if [ -f "$path" ]; then
+			rm -f "$path"
 			print_colored "$GREEN" "$bin removed"
 		fi
 	done
@@ -119,21 +139,71 @@ uninstall_starship_fzf_zoxide() {
 	fi
 }
 
+# backup_of DST — the backup setup.sh made when it replaced DST: the last one it
+# recorded, else (an install from before the record existed) the newest
+# timestamped DST.bak.*, else DST.bak. Prints nothing when there is none.
+backup_of() {
+	b=''
+	if [ -f "$STATE_FILE" ]; then
+		b=$(awk -F '\t' -v d="$1" '$1 == d { b = $2 } END { print b }' "$STATE_FILE")
+	fi
+	if [ -z "$b" ]; then
+		for c in "$1".bak.[0-9]*; do
+			[ -e "$c" ] || [ -L "$c" ] || continue
+			b="$c"
+		done
+	fi
+	if [ -z "$b" ] && { [ -e "$1.bak" ] || [ -L "$1.bak" ]; }; then
+		b="$1.bak"
+	fi
+	if [ -n "$b" ] && { [ -e "$b" ] || [ -L "$b" ]; }; then
+		printf '%s' "$b"
+	fi
+}
+
+# unlink_config DST — remove DST only if it is a symlink into the mybash
+# checkout, then put back what setup.sh replaced. A real file, or a link to
+# anything else, is yours: it is left alone.
+unlink_config() {
+	dst="$1"
+	[ -L "$dst" ] || return 0
+	target=$(readlink -f "$dst" 2>/dev/null || printf '')
+	case "$target" in
+	"$REPO_REAL"/*) ;;
+	*)
+		print_colored "$YELLOW" "Leaving $dst: it does not point into $REPO_PATH"
+		return 0
+		;;
+	esac
+	rm -f "$dst"
+	bak=$(backup_of "$dst")
+	if [ -n "$bak" ]; then
+		mv "$bak" "$dst"
+		print_colored "$GREEN" "Restored $dst from $bak"
+	elif [ "$dst" = "$HOME/.bashrc" ] && [ -f /etc/skel/.bashrc ]; then
+		cp /etc/skel/.bashrc "$dst"
+		print_colored "$GREEN" "Restored .bashrc from /etc/skel"
+	fi
+}
+
 remove_configs() {
 	print_colored "$YELLOW" "Removing configuration files"
+	REPO_REAL=$(readlink -f "$REPO_PATH" 2>/dev/null || printf '%s' "$REPO_PATH")
 
-	if [ -L "$HOME/.bashrc" ]; then
-		rm -f "$HOME/.bashrc"
-		if [ -f "$HOME/.bashrc.bak" ]; then
-			mv "$HOME/.bashrc.bak" "$HOME/.bashrc"
-			print_colored "$GREEN" "Restored original .bashrc"
-		elif [ -f /etc/skel/.bashrc ]; then
-			cp /etc/skel/.bashrc "$HOME/.bashrc"
-			print_colored "$GREEN" "Restored .bashrc from /etc/skel"
+	unlink_config "$HOME/.bashrc"
+	unlink_config "$HOME/.config/starship.toml"
+	unlink_config "$HOME/.config/fastfetch/config.jsonc"
+
+	# The ~/.bash_profile setup.sh writes, and only when it is byte-for-byte that.
+	for generated in '[ -f ~/.bashrc ] && . ~/.bashrc' \
+		"$(printf '%s\n%s' '[ -f ~/.profile ] && . ~/.profile' '[ -f ~/.bashrc ] && . ~/.bashrc')"; do
+		if [ -f "$HOME/.bash_profile" ] && [ "$(cat "$HOME/.bash_profile")" = "$generated" ]; then
+			rm -f "$HOME/.bash_profile"
+			print_colored "$GREEN" "Removed the .bash_profile setup.sh wrote"
 		fi
-	fi
-
-	rm -f "$HOME/.config/starship.toml" "$HOME/.config/fastfetch/config.jsonc"
+	done
+	rm -f "$STATE_FILE" "$STATE_DIR/checkout"
+	rmdir "$STATE_DIR" 2>/dev/null || true
 
 	print_colored "$GREEN" "Configuration files removed"
 }
